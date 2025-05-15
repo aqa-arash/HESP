@@ -9,7 +9,7 @@
 #include "parser.hpp"
 
 // function to check and update periodic boundaries for each particle (can be globalized)
-inline void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
+void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
     x = fmod(fmod(x, boxSize) + boxSize, boxSize);
     y = fmod(fmod(y, boxSize) + boxSize, boxSize);
     z = fmod(fmod(z, boxSize) + boxSize, boxSize);
@@ -74,18 +74,7 @@ void force_updater (size_t particle_idx, std::vector<double>& positions, std::ve
             forces[particle_idx + 2] += force[2];
         }
     }    
-    // check sanity of forces (can be deleted)
-    if (std::isnan(forces[particle_idx]) || std::isnan(forces[particle_idx + 1]) || std::isnan(forces[particle_idx + 2])) {
-        std::cerr << "Error: Forces are NaN for particle " << particle_idx / 3 << std::endl;
-        forces[particle_idx] = 0.0;
-        forces[particle_idx + 1] = 0.0;
-        forces[particle_idx + 2] = 0.0;
-    } else if (std::isinf(forces[particle_idx]) || std::isinf(forces[particle_idx + 1]) || std::isinf(forces[particle_idx + 2])) {
-        std::cerr << "Error: Forces are Inf for particle " << particle_idx / 3 << std::endl;
-        forces[particle_idx] = 0.0;
-        forces[particle_idx + 1] = 0.0;
-        forces[particle_idx + 2] = 0.0;
-}}
+}
 
 // function to calculate the acceleration for a given particle
 // (can be globalized)
@@ -130,9 +119,11 @@ int main() {
 }
     // the minimum x is 0.0
     // check if the positions are out of bounds
-    if (*std::min_element(positions_old.begin(), positions_old.end()) < 0.0) {
-        std::cerr << "Error: Positions are out of bounds!" << std::endl;
-        return -1;
+    for (const auto& pos : positions_old) {
+        if (pos < 0.0 || pos > boxSize) {
+            std::cerr << "Error: Positions are out of bounds!" << std::endl;
+            return -1;
+        }
     }
 
     //set box size to the maximum position + 0.5
@@ -145,18 +136,7 @@ int main() {
     for (size_t i = 0; i < positions_old.size(); i += 3) {
         force_updater(i, positions_old, forces, sigma, epsilon, boxSize);
         acceleration_calculator(i, forces, accelerations, masses);
-        // check sanity of accelerations
-        if (std::isnan(accelerations[i]) || std::isnan(accelerations[i + 1]) || std::isnan(accelerations[i + 2])) {
-            std::cerr << "Error: Accelerations are NaN for particle " << i / 3 << std::endl;
-            accelerations[i] = 0.0;
-            accelerations[i + 1] = 0.0;
-            accelerations[i + 2] = 0.0;
-        } else if (std::isinf(accelerations[i]) || std::isinf(accelerations[i + 1]) || std::isinf(accelerations[i + 2])) {
-            std::cerr << "Error: Accelerations are Inf for particle " << i / 3 << std::endl;
-            accelerations[i] = 0.0;
-            accelerations[i + 1] = 0.0;
-            accelerations[i + 2] = 0.0;
-        }
+
     }
 
     // cout

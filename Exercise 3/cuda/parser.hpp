@@ -2,8 +2,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <regex>
 #include <fstream>
+#include <sstream>
 
 //parse vtk file
 void parseVTKFile(const std::string& filename, std::vector<double>& positions,
@@ -73,7 +73,6 @@ void parseVTKFile(const std::string& filename, std::vector<double>& positions,
         std::cerr << "Error: Mismatched data sizes in VTK file: " << filename << std::endl;
         return;
     }
-    //std::cout << "Parsed data from VTK file: " << filename << std::endl;
     file.close();
 }
 
@@ -86,52 +85,37 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
         std::cerr << "Error opening file: " << filename << std::endl;
         return;
     }
-     // Declare variables outside the loop
     std::string vtkFileName;
-    std::smatch match;
     std::string line;
-    // skip comment lines
+
     while (std::getline(file, line)) {
-        
-        if (line.empty() || line[0] == '#') {continue; // Skip empty lines and comments   
-               }
+        if (line.empty() || line[0] == '#') {
+            continue; // Skip empty lines and comments
+        }
 
-        // get the vtk file name for position, velocity, acceleration, and mass
-        if (std::regex_search(line, match, std::regex("initialization file:\\s*(\\S+)"))) {
-            vtkFileName = match[1];
-            //std::cout << "VTK file name: " << vtkFileName << std::endl;
-            // Read the VTK file
+        std::istringstream iss(line);
+        std::string key;
+        iss >> key;
+
+        if (key == "initialization" && line.find("file:") != std::string::npos) {
+            vtkFileName = line.substr(line.find("file:") + 5);
+            vtkFileName.erase(0, vtkFileName.find_first_not_of(" \t"));
             parseVTKFile(vtkFileName, positions, velocities, masses);
+        } else if (key == "time" && line.find("step") != std::string::npos && line.find("length:") != std::string::npos) {
+            timeStepLength = std::stod(line.substr(line.find("length:") + 7));
+        } else if (key == "time" && line.find("step") != std::string::npos && line.find("count:") != std::string::npos) {
+            timeStepCount = std::stod(line.substr(line.find("count:") + 6));
+        } else if (key == "sigma:") {
+            sigma = std::stod(line.substr(line.find("sigma:") + 6));
+        } else if (key == "epsilon:") {
+            epsilon = std::stod(line.substr(line.find("epsilon:") + 8));
+        } else if (key == "print" && line.find("interval:") != std::string::npos) {
+            printInterval = std::stoi(line.substr(line.find("interval:") + 9));
+        } else if (key == "box" && line.find("size:") != std::string::npos) {
+            boxSize = std::stod(line.substr(line.find("size:") + 5));
         }
-
-        if (std::regex_search(line, match, std::regex("time step length:\\s*(\\S+)"))) {
-            timeStepLength = std::stod(match[1]);
-           // std::cout << "Time step length: " << timeStepLength << std::endl;
-        }
-
-        if (std::regex_search(line, match, std::regex("time step count:\\s*(\\S+)"))) {
-            timeStepCount = std::stod(match[1]);
-          ////  std::cout << "Time step count: " << timeStepCount << std::endl;
-        }
-
-        if (std::regex_search(line, match, std::regex("sigma:\\s*(\\S+)"))) {
-            sigma = std::stod(match[1]);
-          //  std::cout << "Sigma: " << sigma << std::endl;
-        }
-
-        if (std::regex_search(line, match, std::regex("epsilon:\\s*(\\S+)"))) {
-            epsilon = std::stod(match[1]);
-          //  std::cout << "Epsilon: " << epsilon << std::endl;
-        }
-        if (std::regex_search(line, match, std::regex("print interval:\\s*(\\S+)"))) {
-            printInterval = std::stod(match[1]);
-           // std::cout << "Print interval: " << printInterval << std::endl;
-        }
-        if (std::regex_search(line, match, std::regex("box size:\\s*(\\S+)"))) {
-            boxSize = std::stod(match[1]);
-          //  std::cout << "Box size: " << boxSize << std::endl;
-        }
-    }}
+    }
+}
 
 //write vtk file
 void writeVTKFile(const std::string& filename, const std::vector<double>& positions,
@@ -150,8 +134,8 @@ void writeVTKFile(const std::string& filename, const std::vector<double>& positi
     for (size_t i = 0; i < positions.size()/3; ++i) {
         file << positions[i*3] << " " << positions[i*3+1] << " " << positions[i*3+2] << std::endl;
     }
-    file<<"CELLS 0 0"<<std::endl;
-    file<<"CELL_TYPES 0"<<std::endl;
+    file << "CELLS 0 0" << std::endl;
+    file << "CELL_TYPES 0" << std::endl;
     file << "POINT_DATA " << positions.size()/3 << std::endl;
     file << "SCALARS m double" << std::endl;
     file << "LOOKUP_TABLE default" << std::endl;
@@ -164,4 +148,3 @@ void writeVTKFile(const std::string& filename, const std::vector<double>& positi
     }
     file.close();
 }
-
