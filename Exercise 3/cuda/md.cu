@@ -7,6 +7,8 @@
 #include <math.h>
 #include <cmath>
 #include "parser.hpp"
+#include <cuda_runtime.h>
+#include <cuda.h>
 
 // function to check and update periodic boundaries for each particle (can be globalized)
 void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
@@ -102,7 +104,7 @@ int main() {
     // Call the parser
     parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, timeStepLength, timeStepCount, sigma, epsilon, printInterval);
 
-        // Output the parsed data
+    // Output the parsed data
     std::cout << "Parsed Data:" << std::endl;
     std::cout << "Time Step Length: " << timeStepLength << std::endl;
     std::cout << "Time Step Count: " << timeStepCount << std::endl;
@@ -139,9 +141,41 @@ int main() {
 
     }
 
+    //initialize the values on device
+    double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d;
+    double *position_new_d, *velocities_new_d;
+    double *epsilon_d, *sigma_d, *boxSize_d;
+    double *timeStepLength_d, *timeStepCount_d;
+    // allocate memory on device
+    cudaMalloc(&positions_old_d, positions_old.size() * sizeof(double));
+    cudaMalloc(&velocities_old_d, velocities_old.size() * sizeof(double));
+    cudaMalloc(&forces_d, forces.size() * sizeof(double));
+    cudaMalloc(&accelerations_d, accelerations.size() * sizeof(double));
+    cudaMalloc(&masses_d, masses.size() * sizeof(double));
+    cudaMalloc(&position_new_d, position_new.size() * sizeof(double));
+    cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double));
+    cudaMalloc(&epsilon_d, sizeof(double));
+    cudaMalloc(&sigma_d, sizeof(double));
+    cudaMalloc(&boxSize_d, sizeof(double));
+    cudaMalloc(&timeStepLength_d, sizeof(double));
+    cudaMalloc(&timeStepCount_d, sizeof(double));
+
+    // copy data to device
+    cudaMemcpy(positions_old_d, positions_old.data(), positions_old.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(velocities_old_d, velocities_old.data(), velocities_old.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(forces_d, forces.data(), forces.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(accelerations_d, accelerations.data(), accelerations.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(position_new_d, position_new.data(), position_new.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(epsilon_d, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(sigma_d, &sigma, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(boxSize_d, &boxSize, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(timeStepLength_d, &timeStepLength, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(timeStepCount_d, &timeStepCount, sizeof(double), cudaMemcpyHostToDevice);
     // cout
-    //std::cout << "Initial forces calculated " << std::endl;
-    
+    std::cout << "Data copied to device" << std::endl;
+
     // write initial state to file
     std::string outputFile = "output/output0.vtk";
     writeVTKFile(outputFile, positions_old, velocities_old, masses);
@@ -202,5 +236,19 @@ int main() {
     }
 
 
+    // Free device memory
+    cudaFree(positions_old_d);
+    cudaFree(velocities_old_d);
+    cudaFree(forces_d);
+    cudaFree(accelerations_d);
+    cudaFree(masses_d);
+    cudaFree(position_new_d);
+    cudaFree(velocities_new_d);
+    cudaFree(epsilon_d);
+    cudaFree(sigma_d);
+    cudaFree(boxSize_d);
+    cudaFree(timeStepLength_d);
+    cudaFree(timeStepCount_d);
+    
     return 0;
 }

@@ -8,9 +8,16 @@
 //parse vtk file
 void parseVTKFile(const std::string& filename, std::vector<double>& positions,
                std::vector<double>& velocities, std::vector<double>& masses) {
-    std::ifstream file(filename);
+    std::cout << "Parsing VTK file: " << filename << std::endl;
+
+    // Trim leading and trailing whitespace from the filename
+    std::string trimmedFilename = filename;
+    trimmedFilename.erase(0, trimmedFilename.find_first_not_of(" \t"));
+    trimmedFilename.erase(trimmedFilename.find_last_not_of(" \t") + 1);
+
+    std::ifstream file(trimmedFilename);
     if (!file.is_open()) {
-        std::cerr << "Error opening file: " << filename << std::endl;
+        std::cerr << "Error opening file: " << trimmedFilename << std::endl;
         return;
     }
     std::string line;
