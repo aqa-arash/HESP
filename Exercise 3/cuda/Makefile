@@ -1,13 +1,13 @@
 # Compiler and flags
 NVCC := nvcc
-NVCCFLAGS := -O3 -std=c++17
+NVCCFLAGS := -O3 
 RM := rm -f
 
 # Get architecture
 ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | sed 's/\.//')
 NVARCH := sm_$(ARCH)
 NVCCFLAGS += -gencode arch=compute_$(ARCH),code=$(NVARCH)
-NVCCFLAGS += --expt-relaxed-constexpr
+NVCCFLAGS += -lcublas
 
 # Target executables
 TARGET := md
@@ -18,7 +18,7 @@ SRCS := md.cu
 INIT_SRCS := initialVTKmaker.cpp
 
 # Header files
-HEADERS := parser.hpp
+HEADERS := parser.hpp cudafuncs.hpp
 
 # Object files
 OBJS := $(SRCS:.cu=.o)

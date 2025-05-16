@@ -7,8 +7,22 @@
 #include <math.h>
 #include <cmath>
 #include "parser.hpp"
+#include <chrono>
+// cuda includes
+#include "cudafuncs.hpp"
 #include <cuda_runtime.h>
 #include <cuda.h>
+#include <cublas_v2.h>
+
+#define CUDA_CHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line)
+{
+    if (code != cudaSuccess) 
+    {
+        fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        exit(code);
+    }
+}
 
 // function to check and update periodic boundaries for each particle (can be globalized)
 void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
@@ -16,6 +30,7 @@ void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize)
     y = fmod(fmod(y, boxSize) + boxSize, boxSize);
     z = fmod(fmod(z, boxSize) + boxSize, boxSize);
 }
+
 
 // function to calculate the periodic distance between two particles
 // (can be globalized)
@@ -37,9 +52,11 @@ double distance_size(std::vector<double> & distances) {
     return std::sqrt(distances[0] * distances[0] + distances[1] * distances[1] + distances[2] * distances[2]);
 }
 
+
+
 // function to calculate the forces between two particles
 // (can be globalized)
-std::vector<double> ij_forces(std::vector<double> distances, double sigma, double epsilon) {
+std::vector<double> ij_force_calculator(std::vector<double> distances, double sigma, double epsilon) {
     double r = distance_size(distances);
     if (r == 0.0) {
         std::cerr << "Error: Zero distance between particles!" << std::endl;
@@ -59,6 +76,7 @@ std::vector<double> ij_forces(std::vector<double> distances, double sigma, doubl
 }
 }
 
+
 // function to calculate the forces for a given particle
 // (can be globalized)
 void force_updater (size_t particle_idx, std::vector<double>& positions, std::vector<double>& forces, double sigma, double epsilon, double boxSize) {
@@ -70,13 +88,14 @@ void force_updater (size_t particle_idx, std::vector<double>& positions, std::ve
         if (j != particle_idx) {
             std::vector<double> distances = periodic_distance(positions[particle_idx], positions[particle_idx + 1], positions[particle_idx + 2],
                 positions[j], positions[j + 1], positions[j + 2], boxSize);
-            std::vector<double> force = ij_forces(distances, sigma, epsilon);
+            std::vector<double> force = ij_force_calculator(distances, sigma, epsilon);
             forces[particle_idx] += force[0];
             forces[particle_idx + 1] += force[1];
             forces[particle_idx + 2] += force[2];
         }
     }    
 }
+
 
 // function to calculate the acceleration for a given particle
 // (can be globalized)
@@ -89,16 +108,16 @@ void acceleration_calculator (int idx ,std::vector<double> & forces, std::vector
 
 
 
-
 int main() {
     // Test file name
     std::string configFile = "config.txt";
 
     // Variables to hold parsed data
-    std::vector<double> positions_old, velocities_old, masses, position_new, velocities_new, accelerations, forces;
+    std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces;
     
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0;
     int printInterval = 0;
+    int numParticles = 0;
 
     
     // Call the parser
@@ -112,8 +131,9 @@ int main() {
     std::cout << "Epsilon: " << epsilon << std::endl;
     std::cout << "Box Size: " << boxSize << std::endl;
     std::cout << "Print Interval: " << printInterval << std::endl;  
-    std::cout << "Number of particles: " << positions_old.size()/3 << std::endl;
-
+    numParticles = positions_old.size()/3;
+    std::cout << "Number of particles: " << numParticles << std::endl;
+    
     // Check if the parsed data is valid
     if (sigma <= 0.0 || epsilon <= 0.0) {
     std::cerr << "Error: Invalid sigma or epsilon values. Exiting simulation." << std::endl;
@@ -131,7 +151,7 @@ int main() {
     //set box size to the maximum position + 0.5
     accelerations.resize(positions_old.size(), 0.0);
     forces.resize(positions_old.size(), 0.0);
-    position_new.resize(positions_old.size(), 0.0);
+    positions_new.resize(positions_old.size(), 0.0);
     velocities_new.resize(positions_old.size(), 0.0);
     
     //for each element calculate the forces
@@ -143,38 +163,41 @@ int main() {
 
     //initialize the values on device
     double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d;
-    double *position_new_d, *velocities_new_d;
-    double *epsilon_d, *sigma_d, *boxSize_d;
-    double *timeStepLength_d, *timeStepCount_d;
+    double *positions_new_d, *velocities_new_d;
+   
+
     // allocate memory on device
-    cudaMalloc(&positions_old_d, positions_old.size() * sizeof(double));
-    cudaMalloc(&velocities_old_d, velocities_old.size() * sizeof(double));
-    cudaMalloc(&forces_d, forces.size() * sizeof(double));
-    cudaMalloc(&accelerations_d, accelerations.size() * sizeof(double));
-    cudaMalloc(&masses_d, masses.size() * sizeof(double));
-    cudaMalloc(&position_new_d, position_new.size() * sizeof(double));
-    cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double));
-    cudaMalloc(&epsilon_d, sizeof(double));
-    cudaMalloc(&sigma_d, sizeof(double));
-    cudaMalloc(&boxSize_d, sizeof(double));
-    cudaMalloc(&timeStepLength_d, sizeof(double));
-    cudaMalloc(&timeStepCount_d, sizeof(double));
+    CUDA_CHECK( cudaMalloc(&positions_old_d, positions_old.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&velocities_old_d, velocities_old.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&forces_d, forces.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&accelerations_d, accelerations.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&masses_d, masses.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&positions_new_d, positions_new.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double)));
+
 
     // copy data to device
-    cudaMemcpy(positions_old_d, positions_old.data(), positions_old.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(velocities_old_d, velocities_old.data(), velocities_old.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(forces_d, forces.data(), forces.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(accelerations_d, accelerations.data(), accelerations.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(position_new_d, position_new.data(), position_new.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(epsilon_d, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(sigma_d, &sigma, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(boxSize_d, &boxSize, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(timeStepLength_d, &timeStepLength, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(timeStepCount_d, &timeStepCount, sizeof(double), cudaMemcpyHostToDevice);
+    CUDA_CHECK( cudaMemcpy(positions_old_d, positions_old.data(), positions_old.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(velocities_old_d, velocities_old.data(), velocities_old.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(forces_d, forces.data(), forces.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(accelerations_d, accelerations.data(), accelerations.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(positions_new_d, positions_new.data(), positions_new.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice));
+
+
     // cout
     std::cout << "Data copied to device" << std::endl;
+    
+
+    //cudaMemcpy(positions_new.data(), positions_old_d, positions_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
+
+    // prepare the device kernel launch parameters
+    dim3 blockSize(256);
+    dim3 gridSize((masses.size() + blockSize.x - 1) / blockSize.x);
+    // launch the kernel to check periodic boundaries
+
+
 
     // write initial state to file
     std::string outputFile = "output/output0.vtk";
@@ -182,8 +205,10 @@ int main() {
     // cout
     //std::cout << "Initial state written to file " << outputFile << std::endl;
     // cout
-    std::cout << "Starting time loop..." << std::endl;
+
+    std::cout << "Starting time loop for CPU ..." << std::endl;
     // time loop
+    auto start = std::chrono::high_resolution_clock::now();
     for (int timestep = 0; timestep < timeStepCount; ++timestep) {
         // cout
     //    std::cout << "Time step: " << timestep << std::endl;
@@ -191,12 +216,12 @@ int main() {
     //    std::cout << "updating positions and velocities"<< std::endl;
         // Update positions and velocities
         for (size_t i = 0; i < positions_old.size(); i += 3) {
-            position_new[i] = positions_old[i] + velocities_old[i] * timeStepLength + 0.5 * accelerations[i] * timeStepLength * timeStepLength;
-            position_new[i + 1] = positions_old[i + 1] + velocities_old[i + 1] * timeStepLength + 0.5 * accelerations[i + 1] * timeStepLength * timeStepLength;
-            position_new[i + 2] = positions_old[i + 2] + velocities_old[i + 2] * timeStepLength + 0.5 * accelerations[i + 2] * timeStepLength * timeStepLength;
+            positions_new[i] = positions_old[i] + velocities_old[i] * timeStepLength + 0.5 * accelerations[i] * timeStepLength * timeStepLength;
+            positions_new[i + 1] = positions_old[i + 1] + velocities_old[i + 1] * timeStepLength + 0.5 * accelerations[i + 1] * timeStepLength * timeStepLength;
+            positions_new[i + 2] = positions_old[i + 2] + velocities_old[i + 2] * timeStepLength + 0.5 * accelerations[i + 2] * timeStepLength * timeStepLength;
 
             // check periodic boundaries
-            checkPeriodicBoundaries(position_new[i], position_new[i + 1], position_new[i + 2], boxSize);
+            checkPeriodicBoundaries(positions_new[i], positions_new[i + 1], positions_new[i + 2], boxSize);
 
             velocities_new[i] = velocities_old[i] + 0.5 * accelerations[i] * timeStepLength;
             velocities_new[i + 1] = velocities_old[i + 1] + 0.5 * accelerations[i + 1] * timeStepLength;
@@ -206,7 +231,7 @@ int main() {
     //    std::cout << "Forces and accelerations"<< std::endl;
         // update forces and accelerations
         for (size_t i = 0; i < positions_old.size(); i += 3) {
-            force_updater(i, position_new, forces, sigma, epsilon, boxSize);
+            force_updater(i, positions_new, forces, sigma, epsilon, boxSize);
             acceleration_calculator(i, forces, accelerations, masses);
         }
 
@@ -222,7 +247,7 @@ int main() {
         }
 
         // transfer new positions and velocities to old positions
-        std::swap(positions_old, position_new);
+        std::swap(positions_old, positions_new);
         std::swap(velocities_old, velocities_new);
 
         // print to file every printInterval steps
@@ -234,7 +259,71 @@ int main() {
             writeVTKFile(outputFile, positions_old, velocities_old, masses);
         }
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Elapsed time on cpu: " << elapsed.count() << " seconds" << std::endl;
 
+
+    //loop for GPU
+    std::cout << "Starting time loop for GPU ..." << std::endl;
+    // time loop
+    start = std::chrono::high_resolution_clock::now();
+    for (int timestep = 0; timestep < timeStepCount; ++timestep) {
+        // cout
+        //std::cout << "Time step: " << timestep << std::endl;
+        //std::cout<< "updating positions and velocities"<< std::endl;
+        update_positions_d<<<gridSize, blockSize>>>( positions_new_d, positions_old_d, 
+            velocities_old_d, accelerations_d, timeStepLength, boxSize, numParticles);
+        CUDA_CHECK(cudaGetLastError());
+        //std::cout<< "Positions updated"<< std::endl;
+        
+        update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
+             accelerations_d, timeStepLength, numParticles);
+        CUDA_CHECK(cudaGetLastError());
+
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        //std::cout<< "Update complete, swapping"<< std::endl;
+        std::swap(positions_old_d, positions_new_d);
+        std::swap(velocities_old_d, velocities_new_d);
+        // cout
+        //std::cout << " Calculating Forces and accelerations"<< std::endl;
+        // update forces and accelerations
+        acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
+            forces_d, masses_d, sigma, epsilon, boxSize, numParticles);
+        CUDA_CHECK(cudaGetLastError());
+
+        CUDA_CHECK(cudaDeviceSynchronize());
+        // cout
+        //std::cout << "updating velocities"<< std::endl;
+        // update velocities
+        update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
+             accelerations_d, timeStepLength, numParticles);
+        CUDA_CHECK(cudaGetLastError());
+
+        CUDA_CHECK(cudaDeviceSynchronize());
+        // transfer new positions and velocities to old positions
+        
+        std::swap(velocities_old_d, velocities_new_d);
+        //std::cout<< "Loop complete"<< std::endl;
+        // print to file every printInterval steps
+        if (printInterval > 0 && timestep % printInterval == 0) {
+            // cout
+            std::cout << "writing iteration " << timestep<<" to file"<< std::endl;
+            cudaMemcpy(positions_old.data(), positions_old_d, positions_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
+            CUDA_CHECK(cudaGetLastError());
+            cudaMemcpy(velocities_old.data(), velocities_old_d, velocities_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
+            CUDA_CHECK(cudaGetLastError());
+            CUDA_CHECK(cudaDeviceSynchronize());
+            std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
+            writeVTKFile(outputFile, positions_old, velocities_old, masses);
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+    elapsed = end - start;
+    std::cout << "Elapsed time on GPU: " << elapsed.count() << " seconds" << std::endl;
+    
+    std::cout << "Simulation complete!" << std::endl;
 
     // Free device memory
     cudaFree(positions_old_d);
@@ -242,13 +331,9 @@ int main() {
     cudaFree(forces_d);
     cudaFree(accelerations_d);
     cudaFree(masses_d);
-    cudaFree(position_new_d);
+    cudaFree(positions_new_d);
     cudaFree(velocities_new_d);
-    cudaFree(epsilon_d);
-    cudaFree(sigma_d);
-    cudaFree(boxSize_d);
-    cudaFree(timeStepLength_d);
-    cudaFree(timeStepCount_d);
+    
     
     return 0;
 }
