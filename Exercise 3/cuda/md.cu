@@ -60,16 +60,6 @@ int main(int argc, char** argv) {
     numParticles = positions_old.size()/3;
     std::cout << "Number of particles: " << numParticles << std::endl;
     
-    // print the positions and velocities
-    std::cout << "Positions: ";
-    for (size_t i = 0; i < positions_old.size(); ++i) {
-        std::cout << positions_old[i] << " ";
-    }
-    std::cout << std::endl;
-    std::cout << "Velocities: ";
-    for (size_t i = 0; i < velocities_old.size(); ++i) {
-        std::cout << velocities_old[i] << " ";
-    }
 
     // Check if the parsed data is valid
     if (sigma <= 0.0 || epsilon <= 0.0) {
@@ -84,7 +74,7 @@ if (positions_old.size() % 3 != 0) {
 
     // the minimum x is 0.0
     // check if the positions are out of bounds
-    if (boxSize > 0.0) {
+    if (boxSize > 0.000000001) {
     for (const auto& pos : positions_old) {
         if (pos < 0.0 || pos > boxSize) {
             std::cerr << "Error: Positions are out of bounds!" << std::endl;
@@ -149,17 +139,32 @@ if (positions_old.size() % 3 != 0) {
         // cout
         //std::cout << "Time step: " << timestep << std::endl;
         //std::cout<< "updating positions and velocities"<< std::endl;
+        std::cout<< boxSize<< std::endl;
         update_positions_d<<<gridSize, blockSize>>>( positions_new_d, positions_old_d, 
             velocities_old_d, accelerations_d, timeStepLength, boxSize, numParticles);
-        CUDA_CHECK(cudaGetLastError());
-        //std::cout<< "Positions updated"<< std::endl;
-        
+        CUDA_CHECK(cudaGetLastError());        
         update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
              accelerations_d, timeStepLength, numParticles);
         CUDA_CHECK(cudaGetLastError());
-
         CUDA_CHECK(cudaDeviceSynchronize());
+        // check for errors 
+             cudaMemcpy(positions_old.data(), positions_new_d, positions_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
+            CUDA_CHECK(cudaGetLastError());
+            cudaMemcpy(velocities_old.data(), velocities_new_d, velocities_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
+            CUDA_CHECK(cudaGetLastError());
+            CUDA_CHECK(cudaDeviceSynchronize());
 
+              // print the positions and velocities
+    std::cout << "Positions: ";
+    for (size_t i = 0; i < positions_old.size(); ++i) {
+        std::cout << positions_old[i] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "Velocities: ";
+    for (size_t i = 0; i < velocities_old.size(); ++i) {
+        std::cout << velocities_old[i] << " ";
+    }
+        //std::cout<< "Positions updated"<< std::endl;
         //std::cout<< "Update complete, swapping"<< std::endl;
         std::swap(positions_old_d, positions_new_d);
         std::swap(velocities_old_d, velocities_new_d);
@@ -192,6 +197,18 @@ if (positions_old.size() % 3 != 0) {
             cudaMemcpy(velocities_old.data(), velocities_old_d, velocities_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
             CUDA_CHECK(cudaGetLastError());
             CUDA_CHECK(cudaDeviceSynchronize());
+            
+              // print the positions and velocities
+    std::cout << "Positions: ";
+    for (size_t i = 0; i < positions_old.size(); ++i) {
+        std::cout << positions_old[i] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "Velocities: ";
+    for (size_t i = 0; i < velocities_old.size(); ++i) {
+        std::cout << velocities_old[i] << " ";
+    }
+
             std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
             writeVTKFile(outputFile, positions_old, velocities_old, masses);
         }

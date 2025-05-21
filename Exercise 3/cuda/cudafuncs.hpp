@@ -14,7 +14,8 @@ __device__ void checkPeriodicBoundaries_d(double * x, double * y, double * z, do
     *x = fmod(fmod(*x, boxSize) + boxSize, boxSize);
     *y = fmod(fmod(*y, boxSize) + boxSize, boxSize);
     *z = fmod(fmod(*z, boxSize) + boxSize, boxSize);
-}
+    
+    }
 
 
 // function to calculate the distance between two particles on the device
@@ -23,10 +24,12 @@ __device__ void periodic_distance_d(double * distance , double * x1, double * y1
     double dx = *x1 - *x2;
     double dy = *y1 - *y2;
     double dz = *z1 - *z2;
-    // apply periodic boundary conditions
-    dx -= boxSize * round(dx / boxSize);
-    dy -= boxSize * round(dy / boxSize);
-    dz -= boxSize * round(dz / boxSize);
+    if (boxSize>0.000000001){
+        // apply periodic boundary conditions
+        dx -= boxSize * round(dx / boxSize);
+        dy -= boxSize * round(dy / boxSize);
+        dz -= boxSize * round(dz / boxSize);
+    }
     // store the distance in the output array
     distance[0] = dx;
     distance[1] = dy;
@@ -51,7 +54,7 @@ __device__ void ij_forces_d(double * forces, double * distances, double sigma, d
         forces[1] = 0.0;
         forces[2] = 0.0;
     }
-    else if (cutoffRadius > 0 & r>cutoffRadius){ // cut off distance
+    else if (cutoffRadius > 0.000000001 && r>cutoffRadius){ // cut off distance
         forces[0] = 0.0;
         forces[1] = 0.0;
         forces[2] = 0.0;
@@ -82,7 +85,7 @@ __global__ void update_positions_d(double * positions_new, double* positions_old
     positions_new[particle_idx + 2] = positions_old[particle_idx + 2] + velocities_old[particle_idx + 2] * dt 
                                     + 0.5 * accelerations[particle_idx + 2] * dt * dt;
 
-    if (boxSize>0.0){
+    if (boxSize>0.000000001){
     // Check periodic boundaries
         checkPeriodicBoundaries_d(positions_new + particle_idx, positions_new + particle_idx + 1, positions_new + particle_idx + 2, boxSize);
     }

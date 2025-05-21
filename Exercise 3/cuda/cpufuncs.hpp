@@ -23,10 +23,12 @@ std::vector<double> periodic_distance(double x1, double y1, double z1, double x2
     distances[0] = x1 - x2;
     distances[1] = y1 - y2;
     distances[2] = z1 - z2;
+    if (boxSize>0.0){
     // apply periodic boundary conditions
     pbc_distance[0] = distances[0] - boxSize * std::round(distances[0] / boxSize);
     pbc_distance[1] = distances[1] - boxSize * std::round(distances[1] / boxSize);
     pbc_distance[2] = distances[2] - boxSize * std::round(distances[2] / boxSize);
+    }
     return pbc_distance;
 }
 
