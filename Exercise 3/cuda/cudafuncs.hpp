@@ -42,7 +42,7 @@ __device__ void distance_size_d(double * size,double * distances) {
 
 
 // function to calculate the forces between two particles on device
-__device__ void ij_forces_d(double * forces, double * distances, double sigma, double epsilon) {
+__device__ void ij_forces_d(double * forces, double * distances, double sigma, double epsilon, double cutoffRadius) {
     double r = 0.0;
     distance_size_d(&r, distances);
     if (r == 0.0) {
@@ -51,7 +51,7 @@ __device__ void ij_forces_d(double * forces, double * distances, double sigma, d
         forces[1] = 0.0;
         forces[2] = 0.0;
     }
-    else if (r>2.5*sigma){ // cut off distance
+    else if (cutoffRadius > 0 & r>cutoffRadius){ // cut off distance
         forces[0] = 0.0;
         forces[1] = 0.0;
         forces[2] = 0.0;
@@ -82,8 +82,10 @@ __global__ void update_positions_d(double * positions_new, double* positions_old
     positions_new[particle_idx + 2] = positions_old[particle_idx + 2] + velocities_old[particle_idx + 2] * dt 
                                     + 0.5 * accelerations[particle_idx + 2] * dt * dt;
 
+    if (boxSize>0.0){
     // Check periodic boundaries
-    checkPeriodicBoundaries_d(positions_new + particle_idx, positions_new + particle_idx + 1, positions_new + particle_idx + 2, boxSize);
+        checkPeriodicBoundaries_d(positions_new + particle_idx, positions_new + particle_idx + 1, positions_new + particle_idx + 2, boxSize);
+    }
 }
 
 __global__ void update_velocities_d(double * velocities_new, double* velocities_old , double * accelerations, 
@@ -101,7 +103,7 @@ __global__ void update_velocities_d(double * velocities_new, double* velocities_
 
 // function to calculate the forces for a given particle on device
 __global__ void acceleration_updater_d(double * acceleration, double * positions, double * forces, double * masses,  
-    double sigma, double epsilon, double boxSize, int numParticles) {
+    double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles) {
     int particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if ( particle_idx >= numParticles ) return;
     
@@ -116,7 +118,7 @@ __global__ void acceleration_updater_d(double * acceleration, double * positions
             double ij_force[3];
             periodic_distance_d(distances, positions + particle_idx, positions + particle_idx + 1, positions + particle_idx + 2,
                 positions + j, positions + j + 1, positions + j + 2, boxSize);
-            ij_forces_d(ij_force , distances, sigma, epsilon);
+            ij_forces_d(ij_force , distances, sigma, epsilon, cutoffRadius);
             forces[particle_idx] += ij_force[0];
             forces[particle_idx + 1] += ij_force[1];
             forces[particle_idx + 2] += ij_force[2];

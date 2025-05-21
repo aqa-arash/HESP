@@ -27,20 +27,26 @@ inline void gpuAssert(cudaError_t code, const char *file, int line)
 
 
 
-int main() {
+int main(int argc, char** argv) {
+    // Check if the correct number of arguments is provided
+    std::string configFile;
+    if (argc != 2) {
+         configFile= "config.txt";
+    }
+    else {    // Get the config file name from command line arguments
+         configFile = argv[1];
+    }
     // Test file name
-    std::string configFile = "config.txt";
-
     // Variables to hold parsed data
     std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces;
     
-    double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0;
+    double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
     int numParticles = 0;
 
     
     // Call the parser
-    parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, timeStepLength, timeStepCount, sigma, epsilon, printInterval);
+    parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval);
 
     // Output the parsed data
     std::cout << "Parsed Data:" << std::endl;
@@ -49,10 +55,22 @@ int main() {
     std::cout << "Sigma: " << sigma << std::endl;
     std::cout << "Epsilon: " << epsilon << std::endl;
     std::cout << "Box Size: " << boxSize << std::endl;
+    std::cout<< "Cutoff Radius: "<< cutoffRadius<< std::endl;
     std::cout << "Print Interval: " << printInterval << std::endl;  
     numParticles = positions_old.size()/3;
     std::cout << "Number of particles: " << numParticles << std::endl;
     
+    // print the positions and velocities
+    std::cout << "Positions: ";
+    for (size_t i = 0; i < positions_old.size(); ++i) {
+        std::cout << positions_old[i] << " ";
+    }
+    std::cout << std::endl;
+    std::cout << "Velocities: ";
+    for (size_t i = 0; i < velocities_old.size(); ++i) {
+        std::cout << velocities_old[i] << " ";
+    }
+
     // Check if the parsed data is valid
     if (sigma <= 0.0 || epsilon <= 0.0) {
     std::cerr << "Error: Invalid sigma or epsilon values. Exiting simulation." << std::endl;
@@ -66,12 +84,14 @@ if (positions_old.size() % 3 != 0) {
 
     // the minimum x is 0.0
     // check if the positions are out of bounds
+    if (boxSize > 0.0) {
     for (const auto& pos : positions_old) {
         if (pos < 0.0 || pos > boxSize) {
             std::cerr << "Error: Positions are out of bounds!" << std::endl;
             return -1;
         }
     }
+}
 
     //set box size to the maximum position + 0.5
     accelerations.resize(positions_old.size(), 0.0);
@@ -147,7 +167,7 @@ if (positions_old.size() % 3 != 0) {
         //std::cout << " Calculating Forces and accelerations"<< std::endl;
         // update forces and accelerations
         acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
-            forces_d, masses_d, sigma, epsilon, boxSize, numParticles);
+            forces_d, masses_d, sigma, epsilon, boxSize, cutoffRadius, numParticles);
         CUDA_CHECK(cudaGetLastError());
 
         CUDA_CHECK(cudaDeviceSynchronize());

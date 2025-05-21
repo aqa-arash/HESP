@@ -9,7 +9,11 @@
 void parseVTKFile(const std::string& filename, std::vector<double>& positions,
                std::vector<double>& velocities, std::vector<double>& masses) {
     std::cout << "Parsing VTK file: " << filename << std::endl;
-
+    // Check if the filename has hidden characters
+    if (filename.find_first_of("\r\n\t") != std::string::npos) {
+        std::cerr << "Error: Filename contains hidden characters." << std::endl;
+        return;
+    }
     // Trim leading and trailing whitespace from the filename
     std::string trimmedFilename = filename;
     trimmedFilename.erase(0, trimmedFilename.find_first_not_of(" \t"));
@@ -84,7 +88,7 @@ void parseVTKFile(const std::string& filename, std::vector<double>& positions,
 }
 
 void parseConfigFile(const std::string& filename, std::vector<double>& positions,
-               std::vector<double>& velocities, std::vector<double>& masses, double & boxSize,
+               std::vector<double>& velocities, std::vector<double>& masses, double & boxSize, double& cutoffRadius,
                double& timeStepLength, double & timeStepCount, double & sigma, double & epsilon , int & printInterval) 
                {
     std::ifstream file(filename);
@@ -118,8 +122,14 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
             epsilon = std::stod(line.substr(line.find("epsilon:") + 8));
         } else if (key == "print" && line.find("interval:") != std::string::npos) {
             printInterval = std::stoi(line.substr(line.find("interval:") + 9));
-        } else if (key == "box" && line.find("size:") != std::string::npos) {
+        } 
+        // box size, if 0 then disabled
+        else if (key == "box" && line.find("size:") != std::string::npos) {
             boxSize = std::stod(line.substr(line.find("size:") + 5));
+        } 
+        // cut off radius, if 0 then disabled 
+        else if (key == "cutoff" && line.find("radius:") != std::string::npos) {
+            cutoffRadius = std::stod(line.substr(line.find("radius:") + 7));
         }
     }
 }
