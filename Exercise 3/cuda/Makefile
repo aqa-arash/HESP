@@ -18,7 +18,7 @@ SRCS := md.cu
 INIT_SRCS := initialVTKmaker.cpp
 
 # Header files
-HEADERS := parser.hpp cudafuncs.hpp
+HEADERS := parser.hpp cudafuncs.hpp cpufuncs.hpp 
 
 # Object files
 OBJS := $(SRCS:.cu=.o)
