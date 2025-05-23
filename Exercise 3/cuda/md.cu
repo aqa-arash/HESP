@@ -1,6 +1,6 @@
 //write a quick test for the parser
-
 #include <iostream>
+#include <cmath>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -25,8 +25,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line)
     }
 }
 
-
-
 int main(int argc, char** argv) {
     // Check if the correct number of arguments is provided
     std::string configFile;
@@ -39,6 +37,7 @@ int main(int argc, char** argv) {
     // Test file name
     // Variables to hold parsed data
     std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces;
+    std::vector<int> cells, particleCell;
     
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
@@ -99,6 +98,8 @@ if (positions_old.size() % 3 != 0) {
     //initialize the values on device
     double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d;
     double *positions_new_d, *velocities_new_d;
+    int *cells_d;
+    int *particleCell_d;
    
 
     // allocate memory on device
@@ -109,7 +110,20 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMalloc(&masses_d, masses.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&positions_new_d, positions_new.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&particleCell_d, numParticles * sizeof(int)));
 
+    // ...existing code...
+    double cell_size;
+    int num_cells;
+    try {
+        std::tie(cell_size, num_cells) = findMinimalDivisor(cutoffRadius, boxSize);
+        std::cout << "Found cell_size: " << cell_size << ", with num_cells = " << num_cells << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    }
+    
+
+    CUDA_CHECK( cudaMalloc(&cells_d, num_cells * num_cells * num_cells * sizeof(int)));
 
     // copy data to device
     CUDA_CHECK( cudaMemcpy(positions_old_d, positions_old.data(), positions_old.size() * sizeof(double), cudaMemcpyHostToDevice));
@@ -119,7 +133,8 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(positions_new_d, positions_new.data(), positions_new.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice));
-
+    CUDA_CHECK( cudaMemcpy(particleCell_d, particleCell.data(), particleCell.size() * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(cells_d, cells.data(), cells.size() * sizeof(int), cudaMemcpyHostToDevice));
 
     // cout
     std::cout << "Data copied to device" << std::endl;

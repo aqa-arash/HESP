@@ -5,8 +5,41 @@
 #include <random>
 #include <string>
 #include <fstream>
+#include <limits>
+#include <utility>
 
+// Find the minimal d > cutoffRadius such that boxSize / d is approximately an integer
+std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
+    const double epsilon = 1e-10; // numerical tolerance for approximate integer check
+    double best_d = std::numeric_limits<double>::max();
+    int best_n = -1;
 
+    int max_n = static_cast<int>(boxSize / cutoffRadius); // maximum reasonable number of divisions
+
+    for (int n = 1; n <= max_n; ++n) {
+        double d = boxSize / n;
+
+        // Skip if d does not exceed cutoff
+        if (d <= cutoffRadius)
+            continue;
+
+        // Check if boxSize / d is numerically close to an integer
+        double approx_n = boxSize / d;
+        if (std::abs(approx_n - std::round(approx_n)) < epsilon) {
+            // Update if this is the smallest valid d so far
+            if (d < best_d) {
+                best_d = d;
+                best_n = n;
+            }
+        }
+    }
+
+    if (best_n == -1) {
+        throw std::runtime_error("No valid d found.");
+    }
+
+    return {best_d, best_n};
+}
 
 // function to check and update periodic boundaries for each particle (can be globalized)
 void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {

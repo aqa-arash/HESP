@@ -1,13 +1,13 @@
 # Configuration file for simulation
 # Lines starting with '#' are comments and will be ignored
 
-initialization file: initial1000.vtk
+initialization file: initial.vtk
 
-box size: 0.0
-time step length: 0.000001
+box size: 100.0
+time step length: 0.05
 time step count: 1000
 sigma: 3.4
 epsilon: 0.238
 
-print interval: 0
-cutoff radius: 0.0
+print interval: 100
+cutoff radius: 8.5

@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+# Ignore all VTK files
+*.vtk
+# Exceptions: Do not ignore these VTK files
+!initial.vtk
+!initialCircle.vtk
+!initialLightHeavy.vtk
+!initialPingPong.vtk
