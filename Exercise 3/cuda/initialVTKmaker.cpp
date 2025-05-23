@@ -9,12 +9,12 @@
 #include <random>
 
 
-int main (){
+int main () {
 
     // declare variables
     std::vector<double> positions, velocities, masses;
-    double boxSize = 10.0;
-    int numParticles = 10;
+    double boxSize = 10000.0;
+    int numParticles = 10000;
     std::default_random_engine generator;
     std::uniform_real_distribution<double> distribution(-0.1, 0.1);
 
@@ -51,7 +51,7 @@ int main (){
     }
 
     // write to file
-    std::string file ="initial.vtk";
+    std::string file ="initial/initial1000.vtk";
     writeVTKFile(file, positions, velocities, masses);
     
 }

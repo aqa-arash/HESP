@@ -139,7 +139,6 @@ if (positions_old.size() % 3 != 0) {
         // cout
         //std::cout << "Time step: " << timestep << std::endl;
         //std::cout<< "updating positions and velocities"<< std::endl;
-        std::cout<< boxSize<< std::endl;
         update_positions_d<<<gridSize, blockSize>>>( positions_new_d, positions_old_d, 
             velocities_old_d, accelerations_d, timeStepLength, boxSize, numParticles);
         CUDA_CHECK(cudaGetLastError());        
@@ -154,16 +153,6 @@ if (positions_old.size() % 3 != 0) {
             CUDA_CHECK(cudaGetLastError());
             CUDA_CHECK(cudaDeviceSynchronize());
 
-              // print the positions and velocities
-    std::cout << "Positions: ";
-    for (size_t i = 0; i < positions_old.size(); ++i) {
-        std::cout << positions_old[i] << " ";
-    }
-    std::cout << std::endl;
-    std::cout << "Velocities: ";
-    for (size_t i = 0; i < velocities_old.size(); ++i) {
-        std::cout << velocities_old[i] << " ";
-    }
         //std::cout<< "Positions updated"<< std::endl;
         //std::cout<< "Update complete, swapping"<< std::endl;
         std::swap(positions_old_d, positions_new_d);
@@ -197,25 +186,14 @@ if (positions_old.size() % 3 != 0) {
             cudaMemcpy(velocities_old.data(), velocities_old_d, velocities_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
             CUDA_CHECK(cudaGetLastError());
             CUDA_CHECK(cudaDeviceSynchronize());
-            
-              // print the positions and velocities
-    std::cout << "Positions: ";
-    for (size_t i = 0; i < positions_old.size(); ++i) {
-        std::cout << positions_old[i] << " ";
-    }
-    std::cout << std::endl;
-    std::cout << "Velocities: ";
-    for (size_t i = 0; i < velocities_old.size(); ++i) {
-        std::cout << velocities_old[i] << " ";
-    }
-
+    
             std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
             writeVTKFile(outputFile, positions_old, velocities_old, masses);
         }
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed = end - start;
-    std::cout << "Elapsed time on GPU: " << elapsed.count() << " seconds" << std::endl;
+    std::cout << "Elapsed time on GPU: " << std::chrono::duration<double>(elapsed).count() << " seconds" << std::endl;
     
     std::cout << "Simulation complete!" << std::endl;
 

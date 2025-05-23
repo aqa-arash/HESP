@@ -4,6 +4,8 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+#include <iomanip> 
 
 //parse vtk file
 void parseVTKFile(const std::string& filename, std::vector<double>& positions,
@@ -137,11 +139,14 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
 //write vtk file
 void writeVTKFile(const std::string& filename, const std::vector<double>& positions,
                   const std::vector<double>& velocities, const std::vector<double>& masses) {
+    std::filesystem::create_directories(std::filesystem::path(filename).parent_path());
     std::ofstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Error opening file: " << filename << std::endl;
         return;
     }
+    file << std::fixed << std::setprecision(10);
+
     file << "# vtk DataFile Version 4.0" << std::endl;
     file << "hesp visualization file" << std::endl;
     file << "ASCII" << std::endl;
