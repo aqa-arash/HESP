@@ -104,34 +104,124 @@ __global__ void update_velocities_d(double * velocities_new, double* velocities_
 }
 
 
-// function to calculate the forces for a given particle on device
-__global__ void acceleration_updater_d(double * acceleration, double * positions, double * forces, double * masses,  
-    double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles) {
+// Helper function to get cell coordinates from cell ID (assuming cubic grid)
+__device__ void getCellCoords(int cellId, int num_cells, int *x, int *y, int *z) {
+    *z = cellId / (num_cells * num_cells);
+    int rem = cellId % (num_cells * num_cells);
+    *y = rem / num_cells;
+    *x = rem % num_cells;
+}
+
+// Helper function to check if cell2 is neighbor of cell1 (including cell1 itself)
+__device__ bool isNeighborCell(int cell1, int cell2, int num_cells) {
+    int x1, y1, z1;
+    int x2, y2, z2;
+    getCellCoords(cell1, num_cells, &x1, &y1, &z1);
+    getCellCoords(cell2, num_cells, &x2, &y2, &z2);
+
+    int dx = abs(x1 - x2);
+    int dy = abs(y1 - y2);
+    int dz = abs(z1 - z2);
+
+    // Account for periodic boundaries:
+    if (dx > num_cells/2) dx = num_cells - dx;
+    if (dy > num_cells/2) dy = num_cells - dy;
+    if (dz > num_cells/2) dz = num_cells - dz;
+
+    return (dx <= 1 && dy <= 1 && dz <= 1);
+}
+
+__global__ void acceleration_updater_d(
+    double * acceleration, double * positions, double * forces, double * masses,  
+    double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles, 
+    int * cells, int * particleCell, int num_cells)  // num_cells added as param
+{
     int particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if ( particle_idx >= numParticles ) return;
-    
-    particle_idx *= 3;
-    forces[particle_idx] = 0.0;
-    forces[particle_idx + 1] = 0.0;
-    forces[particle_idx + 2] = 0.0;
-    // Calculate forces for the particle at particle_idx
-    for (size_t j = 0; j < 3*numParticles; j += 3) {
-        if (j != particle_idx) {
-            double distances[3];
-            double ij_force[3];
-            periodic_distance_d(distances, positions + particle_idx, positions + particle_idx + 1, positions + particle_idx + 2,
-                positions + j, positions + j + 1, positions + j + 2, boxSize);
-            ij_forces_d(ij_force , distances, sigma, epsilon, cutoffRadius);
-            forces[particle_idx] += ij_force[0];
-            forces[particle_idx + 1] += ij_force[1];
-            forces[particle_idx + 2] += ij_force[2];
+    if (particle_idx >= numParticles) return;
+
+    int particle_pos = particle_idx * 3;
+
+    // Reset force vector for this particle
+    forces[particle_pos] = 0.0;
+    forces[particle_pos + 1] = 0.0;
+    forces[particle_pos + 2] = 0.0;
+
+    // Get cell of this particle
+    int cell_of_particle = particleCell[particle_idx];
+
+    // Loop over all other particles to calculate forces
+    for (int j = 0; j < numParticles; j++) {
+        if (j == particle_idx) continue; // Skip self interaction
+
+        // Check if particle j is in the same or neighboring cell
+        int cell_of_j = particleCell[j];
+        if (!isNeighborCell(cell_of_particle, cell_of_j, num_cells)) {
+            continue; // skip force calculation for non-neighboring cells
         }
-    } 
-    // Calculate acceleration for the particle at particle_idx
-    acceleration[particle_idx] = forces[particle_idx] / masses[particle_idx / 3];
-    acceleration[particle_idx + 1] = forces[particle_idx + 1] / masses[particle_idx / 3];
-    acceleration[particle_idx + 2] = forces[particle_idx + 2] / masses[particle_idx / 3];
-    
-   
+
+        int j_pos = j * 3;
+
+        double distances[3];
+        double ij_force[3];
+
+        // Calculate periodic distance vector between particles
+        periodic_distance_d(distances, positions + particle_pos, positions + particle_pos + 1, positions + particle_pos + 2,
+                                 positions + j_pos, positions + j_pos + 1, positions + j_pos + 2, boxSize);
+
+        // Calculate inter-particle forces using Lennard-Jones potential (or similar)
+        ij_forces_d(ij_force , distances, sigma, epsilon, cutoffRadius);
+
+        // Accumulate forces
+        forces[particle_pos] += ij_force[0];
+        forces[particle_pos + 1] += ij_force[1];
+        forces[particle_pos + 2] += ij_force[2];
+    }
+
+    // Calculate acceleration by dividing force by particle mass
+    double mass = masses[particle_idx];
+    acceleration[particle_pos]     = forces[particle_pos]     / mass;
+    acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
+    acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
+}
+
+
+__global__ void resetCells(int* cells, int total_cells) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < total_cells) {
+        cells[idx] = -1;
+    }
+}
+
+__global__ void computeParticleCells(
+    const double* positions,   // Linear array: [x0, y0, z0, x1, y1, z1, ...]
+    int* cells,                // Head of linked list per cell
+    int* particleCell,         // Linked list: next particle for each particle
+    int N,                     // Number of particles
+    int num_cells,             // Number of cells per dimension (cube root of total_cells)
+    int total_cells,           // Total number of cells (num_cells^3)
+    double cell_size)          // Cell size (same in x, y, z)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+
+    // Access x, y, z of particle i
+    double x = positions[3 * i + 0];
+    double y = positions[3 * i + 1];
+    double z = positions[3 * i + 2];
+
+    // Compute integer cell indices (with periodic boundary conditions)
+    int cx = ((int)(x / cell_size)) % num_cells;
+    int cy = ((int)(y / cell_size)) % num_cells;
+    int cz = ((int)(z / cell_size)) % num_cells;
+
+    if (cx < 0) cx += num_cells;
+    if (cy < 0) cy += num_cells;
+    if (cz < 0) cz += num_cells;
+
+    // Compute 1D cell index
+    int cell_index = cx + cy * num_cells + cz * num_cells * num_cells; // Is this right for C? Or do we just need to be consecutive?
+
+    // Atomically insert particle i at the front of the linked list for this cell
+    particleCell[i] = atomicExch(&cells[cell_index], i);
 }
 

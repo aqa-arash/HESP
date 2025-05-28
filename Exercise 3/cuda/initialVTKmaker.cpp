@@ -13,8 +13,8 @@ int main () {
 
     // declare variables
     std::vector<double> positions, velocities, masses;
-    double boxSize = 10000.0;
-    int numParticles = 10000;
+    double boxSize = 17.0;
+    int numParticles = 3;
     std::default_random_engine generator;
     std::uniform_real_distribution<double> distribution(-0.1, 0.1);
 

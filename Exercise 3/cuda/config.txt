@@ -3,11 +3,11 @@
 
 initialization file: initial.vtk
 
-box size: 100.0
+box size: 17.0
 time step length: 0.05
-time step count: 1000
+time step count: 10
 sigma: 3.4
 epsilon: 0.238
 
-print interval: 100
-cutoff radius: 8.5
+print interval: 1
+cutoff radius: 8.0

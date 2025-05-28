@@ -122,8 +122,8 @@ if (positions_old.size() % 3 != 0) {
         std::cerr << "Error: " << e.what() << std::endl;
     }
     
-
-    CUDA_CHECK( cudaMalloc(&cells_d, num_cells * num_cells * num_cells * sizeof(int)));
+    int total_cells = num_cells * num_cells * num_cells;
+    CUDA_CHECK( cudaMalloc(&cells_d, total_cells * sizeof(int)));
 
     // copy data to device
     CUDA_CHECK( cudaMemcpy(positions_old_d, positions_old.data(), positions_old.size() * sizeof(double), cudaMemcpyHostToDevice));
@@ -174,9 +174,45 @@ if (positions_old.size() % 3 != 0) {
         std::swap(velocities_old_d, velocities_new_d);
         // cout
         //std::cout << " Calculating Forces and accelerations"<< std::endl;
+        // build up linked neighbor list
+        // Reset cells to -1
+        resetCells<<<total_cells, blockSize>>>(cells_d, total_cells);
+        computeParticleCells<<<gridSize, blockSize>>>(
+            positions_old_d,
+            cells_d,
+            particleCell_d,
+            numParticles,
+            num_cells,
+            total_cells,
+            cell_size
+        );
+
+        // Copy particleCell_d and cells_d from device to host and print them
+        std::vector<int> particleCell_host(numParticles);
+        std::vector<int> cells_host(total_cells);
+
+        CUDA_CHECK(cudaMemcpy(particleCell_host.data(), particleCell_d, numParticles * sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(cells_host.data(), cells_d, total_cells * sizeof(int), cudaMemcpyDeviceToHost));
+        
+        /*
+        // Print particleCell_d with timestep
+        std::cout << "timestep " << timestep << " particleCell_d: ";
+        for (int i = 0; i < numParticles; ++i) {
+            std::cout << particleCell_host[i] << " ";
+        }
+        std::cout << std::endl;
+
+        // Print cells_d with timestep
+        std::cout << "timestep " << timestep << " cells_d: ";
+        for (int i = 0; i < total_cells; ++i) {
+            std::cout << cells_host[i] << " ";
+        }
+        std::cout << std::endl;
+        */
+
         // update forces and accelerations
         acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
-            forces_d, masses_d, sigma, epsilon, boxSize, cutoffRadius, numParticles);
+            forces_d, masses_d, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells_d, particleCell_d, num_cells);
         CUDA_CHECK(cudaGetLastError());
 
         CUDA_CHECK(cudaDeviceSynchronize());
