@@ -35,7 +35,8 @@ std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
     }
 
     if (best_n == -1) {
-        throw std::runtime_error("No valid d found.");
+        best_d = boxSize; // If no valid d found, return boxSize as default
+        best_n = 1; // and set n to 1
     }
 
     return {best_d, best_n};

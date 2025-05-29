@@ -147,16 +147,21 @@ __global__ void acceleration_updater_d(
     forces[particle_pos + 2] = 0.0;
 
     // Get cell of this particle
-    int cell_of_particle = particleCell[particle_idx];
+    int cell_of_particle = -1; // Default value if no cells are used
+    if (num_cells > 3){
+        cell_of_particle = particleCell[particle_idx];
+    }
 
     // Loop over all other particles to calculate forces
     for (int j = 0; j < numParticles; j++) {
         if (j == particle_idx) continue; // Skip self interaction
 
         // Check if particle j is in the same or neighboring cell
-        int cell_of_j = particleCell[j];
-        if (!isNeighborCell(cell_of_particle, cell_of_j, num_cells)) {
-            continue; // skip force calculation for non-neighboring cells
+        if (num_cells > 3){
+            int cell_of_j = particleCell[j];
+            if (!isNeighborCell(cell_of_particle, cell_of_j, num_cells)) {
+                continue; // skip force calculation for non-neighboring cells
+            }
         }
 
         int j_pos = j * 3;

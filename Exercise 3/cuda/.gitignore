@@ -33,3 +33,9 @@ output/
 *.out
 *.app
 *.vtk
+
+# Exceptions: Do not ignore these VTK files
+!initialCircle.vtk
+!initialLightHeavy.vtk
+!initialPingPong.vtk
+!sphere_particle.vtk

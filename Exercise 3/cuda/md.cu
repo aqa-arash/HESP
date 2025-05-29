@@ -37,15 +37,15 @@ int main(int argc, char** argv) {
     // Test file name
     // Variables to hold parsed data
     std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces;
-    std::vector<int> cells, particleCell;
     
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
     int numParticles = 0;
+    int useAcc = 1;
 
     
     // Call the parser
-    parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval);
+    parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval, useAcc);
 
     // Output the parsed data
     std::cout << "Parsed Data:" << std::endl;
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     std::cout << "Print Interval: " << printInterval << std::endl;  
     numParticles = positions_old.size()/3;
     std::cout << "Number of particles: " << numParticles << std::endl;
-    
+    std::cout << "Use acceleration: " << useAcc << std::endl;
 
     // Check if the parsed data is valid
     if (sigma <= 0.0 || epsilon <= 0.0) {
@@ -101,6 +101,25 @@ if (positions_old.size() % 3 != 0) {
     int *cells_d;
     int *particleCell_d;
    
+    // calculate the cell size and number of cells
+    double cell_size;
+    int num_cells;
+    // if boxSize is 0.0 or cutoffRadius is 0.0, set num_cells to 1 and cell_size to boxSize
+    // otherwise find the minimal divisor of cutoffRadius and boxSize
+    if (boxSize == 0.0 || cutoffRadius == 0.0 || useAcc == 0) {
+        num_cells = 1;
+        cell_size = boxSize;
+        std::cout << "Box size or cutoff radius or useAcc is zero, setting num_cells = 1, cell_size = " << cell_size << std::endl;
+    } else {
+        try {
+            std::tie(cell_size, num_cells) = findMinimalDivisor(cutoffRadius, boxSize);
+            std::cout << "Found cell_size: " << cell_size << ", with num_cells = " << num_cells << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Error: " << e.what() << std::endl;
+        }
+    }
+    
+    int total_cells = num_cells * num_cells * num_cells;
 
     // allocate memory on device
     CUDA_CHECK( cudaMalloc(&positions_old_d, positions_old.size() * sizeof(double)));
@@ -111,18 +130,6 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMalloc(&positions_new_d, positions_new.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&particleCell_d, numParticles * sizeof(int)));
-
-    // ...existing code...
-    double cell_size;
-    int num_cells;
-    try {
-        std::tie(cell_size, num_cells) = findMinimalDivisor(cutoffRadius, boxSize);
-        std::cout << "Found cell_size: " << cell_size << ", with num_cells = " << num_cells << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-    }
-    
-    int total_cells = num_cells * num_cells * num_cells;
     CUDA_CHECK( cudaMalloc(&cells_d, total_cells * sizeof(int)));
 
     // copy data to device
@@ -133,8 +140,6 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(positions_new_d, positions_new.data(), positions_new.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK( cudaMemcpy(particleCell_d, particleCell.data(), particleCell.size() * sizeof(int), cudaMemcpyHostToDevice));
-    CUDA_CHECK( cudaMemcpy(cells_d, cells.data(), cells.size() * sizeof(int), cudaMemcpyHostToDevice));
 
     // cout
     std::cout << "Data copied to device" << std::endl;
@@ -172,44 +177,47 @@ if (positions_old.size() % 3 != 0) {
         //std::cout<< "Update complete, swapping"<< std::endl;
         std::swap(positions_old_d, positions_new_d);
         std::swap(velocities_old_d, velocities_new_d);
-        // cout
-        //std::cout << " Calculating Forces and accelerations"<< std::endl;
-        // build up linked neighbor list
+
+        // Build up linked neighbor list
         // Reset cells to -1
-        resetCells<<<total_cells, blockSize>>>(cells_d, total_cells);
-        computeParticleCells<<<gridSize, blockSize>>>(
-            positions_old_d,
-            cells_d,
-            particleCell_d,
-            numParticles,
-            num_cells,
-            total_cells,
-            cell_size
-        );
+        if (num_cells > 3) {
+            // If there are only neighbor cells, we don't need to compute particle cells
+            resetCells<<<total_cells, blockSize>>>(cells_d, total_cells);
+            computeParticleCells<<<gridSize, blockSize>>>(
+                positions_old_d,
+                cells_d,
+                particleCell_d,
+                numParticles,
+                num_cells,
+                total_cells,
+                cell_size
+            );
+            
+            /*
+            // Copy particleCell_d and cells_d from device to host and print them
+            std::vector<int> particleCell_host(numParticles);
+            std::vector<int> cells_host(total_cells);
 
-        // Copy particleCell_d and cells_d from device to host and print them
-        std::vector<int> particleCell_host(numParticles);
-        std::vector<int> cells_host(total_cells);
+            CUDA_CHECK(cudaMemcpy(particleCell_host.data(), particleCell_d, numParticles * sizeof(int), cudaMemcpyDeviceToHost));
+            CUDA_CHECK(cudaMemcpy(cells_host.data(), cells_d, total_cells * sizeof(int), cudaMemcpyDeviceToHost));
+            
+            // Print particleCell_d with timestep
+            std::cout << "timestep " << timestep << " particleCell_d: ";
+            for (int i = 0; i < numParticles; ++i) {
+                std::cout << particleCell_host[i] << " ";
+            }
+            std::cout << std::endl;
 
-        CUDA_CHECK(cudaMemcpy(particleCell_host.data(), particleCell_d, numParticles * sizeof(int), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaMemcpy(cells_host.data(), cells_d, total_cells * sizeof(int), cudaMemcpyDeviceToHost));
+            // Print cells_d with timestep
+            std::cout << "timestep " << timestep << " cells_d: ";
+            for (int i = 0; i < total_cells; ++i) {
+                std::cout << cells_host[i] << " ";
+            }
+            std::cout << std::endl;
+            */
+        }
         
-        /*
-        // Print particleCell_d with timestep
-        std::cout << "timestep " << timestep << " particleCell_d: ";
-        for (int i = 0; i < numParticles; ++i) {
-            std::cout << particleCell_host[i] << " ";
-        }
-        std::cout << std::endl;
-
-        // Print cells_d with timestep
-        std::cout << "timestep " << timestep << " cells_d: ";
-        for (int i = 0; i < total_cells; ++i) {
-            std::cout << cells_host[i] << " ";
-        }
-        std::cout << std::endl;
-        */
-
+        //std::cout << " Calculating Forces and accelerations"<< std::endl;
         // update forces and accelerations
         acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
             forces_d, masses_d, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells_d, particleCell_d, num_cells);
@@ -256,6 +264,8 @@ if (positions_old.size() % 3 != 0) {
     cudaFree(masses_d);
     cudaFree(positions_new_d);
     cudaFree(velocities_new_d);
+    cudaFree(cells_d);
+    cudaFree(particleCell_d);
     
     
     return 0;

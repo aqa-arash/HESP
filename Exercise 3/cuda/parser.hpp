@@ -91,7 +91,7 @@ void parseVTKFile(const std::string& filename, std::vector<double>& positions,
 
 void parseConfigFile(const std::string& filename, std::vector<double>& positions,
                std::vector<double>& velocities, std::vector<double>& masses, double & boxSize, double& cutoffRadius,
-               double& timeStepLength, double & timeStepCount, double & sigma, double & epsilon , int & printInterval) 
+               double& timeStepLength, double & timeStepCount, double & sigma, double & epsilon , int & printInterval, int & useAcc) 
                {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -132,6 +132,9 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
         // cut off radius, if 0 then disabled 
         else if (key == "cutoff" && line.find("radius:") != std::string::npos) {
             cutoffRadius = std::stod(line.substr(line.find("radius:") + 7));
+        // check for acceleration being used
+        } else if (key == "acceleration:") {
+            useAcc = std::stoi(line.substr(line.find("acceleration:") + 13));
         }
     }
 }
