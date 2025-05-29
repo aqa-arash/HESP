@@ -85,7 +85,7 @@ __global__ void update_positions_d(double * positions_new, double* positions_old
     positions_new[particle_idx + 2] = positions_old[particle_idx + 2] + velocities_old[particle_idx + 2] * dt 
                                     + 0.5 * accelerations[particle_idx + 2] * dt * dt;
 
-    if (boxSize>0.000000001){
+    if (boxSize>0.000000001){ // to prevent numerical errors 
     // Check periodic boundaries
         checkPeriodicBoundaries_d(positions_new + particle_idx, positions_new + particle_idx + 1, positions_new + particle_idx + 2, boxSize);
     }

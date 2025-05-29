@@ -73,7 +73,7 @@ if (positions_old.size() % 3 != 0) {
 
     // the minimum x is 0.0
     // check if the positions are out of bounds
-    if (boxSize > 0.000000001) {
+    if (boxSize > 0.000000001) { // to avoid numerical errors with very small box sizes
     for (const auto& pos : positions_old) {
         if (pos < 0.0 || pos > boxSize) {
             std::cerr << "Error: Positions are out of bounds!" << std::endl;
@@ -166,12 +166,6 @@ if (positions_old.size() % 3 != 0) {
              accelerations_d, timeStepLength, numParticles);
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());
-        // check for errors 
-             cudaMemcpy(positions_old.data(), positions_new_d, positions_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
-            CUDA_CHECK(cudaGetLastError());
-            cudaMemcpy(velocities_old.data(), velocities_new_d, velocities_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
-            CUDA_CHECK(cudaGetLastError());
-            CUDA_CHECK(cudaDeviceSynchronize());
 
         //std::cout<< "Positions updated"<< std::endl;
         //std::cout<< "Update complete, swapping"<< std::endl;
@@ -182,7 +176,7 @@ if (positions_old.size() % 3 != 0) {
         // Reset cells to -1
         if (num_cells > 3) {
             // If there are only neighbor cells, we don't need to compute particle cells
-            resetCells<<<total_cells, blockSize>>>(cells_d, total_cells);
+            resetCells<<<total_cells, blockSize>>>(cells_d, total_cells); // should we lunch less blocks ? 
             computeParticleCells<<<gridSize, blockSize>>>(
                 positions_old_d,
                 cells_d,
@@ -193,7 +187,7 @@ if (positions_old.size() % 3 != 0) {
                 cell_size
             );
             
-            /*
+            /* debugging code to print particleCell_d and cells_d{
             // Copy particleCell_d and cells_d from device to host and print them
             std::vector<int> particleCell_host(numParticles);
             std::vector<int> cells_host(total_cells);
@@ -214,7 +208,7 @@ if (positions_old.size() % 3 != 0) {
                 std::cout << cells_host[i] << " ";
             }
             std::cout << std::endl;
-            */
+        }*/
         }
         
         //std::cout << " Calculating Forces and accelerations"<< std::endl;
