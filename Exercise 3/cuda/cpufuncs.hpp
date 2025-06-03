@@ -20,7 +20,7 @@ std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
         double d = boxSize / n;
 
         // Skip if d does not exceed cutoff
-        if (d <= cutoffRadius)
+        if (d < cutoffRadius)
             continue;
 
         // Check if boxSize / d is numerically close to an integer

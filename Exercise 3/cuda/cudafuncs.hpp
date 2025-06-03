@@ -146,48 +146,77 @@ __global__ void acceleration_updater_d(
     forces[particle_pos + 1] = 0.0;
     forces[particle_pos + 2] = 0.0;
 
-    // Get cell of this particle
-    int cell_of_particle = -1; // Default value if no cells are used
-    if (num_cells > 3){
-        cell_of_particle = particleCell[particle_idx];
-    }
+    if (numCells > 3) {
+           // calculate cell x y z coordinates
+        int cell_x, cell_y, cell_z;
+        if (num_cells > 3) {
+            getCellCoords(cell_of_particle, num_cells, &cell_x, &cell_y, &cell_z);  
+        }
+        
+        for int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    // Calculate neighbor cell index
+                    int neighbor_cell_x = (cell_x + x + num_cells) % num_cells;
+                    int neighbor_cell_y = (cell_y + y + num_cells) % num_cells;
+                    int neighbor_cell_z = (cell_z + z + num_cells) % num_cells;
+                    int neighbor_cell_index = neighbor_cell_x + 
+                                              neighbor_cell_y * num_cells + 
+                                              neighbor_cell_z * num_cells * num_cells;
 
-    // Loop over all other particles to calculate forces
-    for (int j = 0; j < numParticles; j++) {
-        if (j == particle_idx) continue; // Skip self interaction
+                    // Get the first particle in this cell
+                    int j = cells[neighbor_cell_index];
+                    while (j != -1) {
+                        if (j != particle_idx) { // Skip self interaction
+                            // Calculate distance and forces
+                            double distances[3];
+                            double ij_force[3];
 
-        // Check if particle j is in the same or neighboring cell
-        if (num_cells > 3){
-            int cell_of_j = particleCell[j];
-            if (!isNeighborCell(cell_of_particle, cell_of_j, num_cells)) {
-                continue; // skip force calculation for non-neighboring cells
+                            periodic_distance_d(distances, positions + particle_pos, positions + particle_pos + 1, positions + particle_pos + 2,
+                                                 positions + j * 3, positions + j * 3 + 1, positions + j * 3 + 2, boxSize);
+
+                            ij_forces_d(ij_force, distances, sigma, epsilon, cutoffRadius);
+
+                            // Accumulate forces
+                            forces[particle_pos] += ij_force[0];
+                            forces[particle_pos + 1] += ij_force[1];
+                            forces[particle_pos + 2] += ij_force[2];
+                        }
+                        j = particleCell[j]; // Move to next particle in the linked list
+                    }
+                }
             }
         }
+    }
+    else {
+    // Loop over all other particles to calculate forces
+        for (int j = 0; j < numParticles; j++) {
+            if (j == particle_idx) continue; // Skip self interaction
+            int j_pos = j * 3;
 
-        int j_pos = j * 3;
+            double distances[3];
+            double ij_force[3];
 
-        double distances[3];
-        double ij_force[3];
+            // Calculate periodic distance vector between particles
+            periodic_distance_d(distances, positions + particle_pos, positions + particle_pos + 1, positions + particle_pos + 2,
+                                    positions + j_pos, positions + j_pos + 1, positions + j_pos + 2, boxSize);
 
-        // Calculate periodic distance vector between particles
-        periodic_distance_d(distances, positions + particle_pos, positions + particle_pos + 1, positions + particle_pos + 2,
-                                 positions + j_pos, positions + j_pos + 1, positions + j_pos + 2, boxSize);
+            // Calculate inter-particle forces using Lennard-Jones potential (or similar)
+            ij_forces_d(ij_force , distances, sigma, epsilon, cutoffRadius);
 
-        // Calculate inter-particle forces using Lennard-Jones potential (or similar)
-        ij_forces_d(ij_force , distances, sigma, epsilon, cutoffRadius);
-
-        // Accumulate forces
-        forces[particle_pos] += ij_force[0];
-        forces[particle_pos + 1] += ij_force[1];
-        forces[particle_pos + 2] += ij_force[2];
+            // Accumulate forces
+            forces[particle_pos] += ij_force[0];
+            forces[particle_pos + 1] += ij_force[1];
+            forces[particle_pos + 2] += ij_force[2];
+        }
     }
 
-    // Calculate acceleration by dividing force by particle mass
-    double mass = masses[particle_idx];
-    acceleration[particle_pos]     = forces[particle_pos]     / mass;
-    acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
-    acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
-}
+        // Calculate acceleration by dividing force by particle mass
+        double mass = masses[particle_idx];
+        acceleration[particle_pos]     = forces[particle_pos]     / mass;
+        acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
+        acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
+    }
 
 
 __global__ void resetCells(int* cells, int total_cells) {
