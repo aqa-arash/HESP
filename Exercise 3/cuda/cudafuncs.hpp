@@ -146,14 +146,20 @@ __global__ void acceleration_updater_d(
     forces[particle_pos + 1] = 0.0;
     forces[particle_pos + 2] = 0.0;
 
-    if (numCells > 3) {
-           // calculate cell x y z coordinates
+    if (num_cells > 3) {
+        // calculate cell x y z coordinates
         int cell_x, cell_y, cell_z;
-        if (num_cells > 3) {
-            getCellCoords(cell_of_particle, num_cells, &cell_x, &cell_y, &cell_z);  
-        }
+        double x_P = positions[3 * particle_idx + 0];
+        double y_P = positions[3 * particle_idx + 1];
+        double z_P = positions[3 * particle_idx + 2];
+
+        // Compute integer cell indices (with periodic boundary conditions)
+        double cell_size = boxSize / num_cells; // Assuming cubic cells
+        cell_x = ((int)(x_P / cell_size)) % num_cells;
+        cell_y = ((int)(y_P / cell_size)) % num_cells;
+        cell_z = ((int)(z_P / cell_size)) % num_cells;
         
-        for int x = -1; x <= 1; x++) {
+        for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -1; z <= 1; z++) {
                     // Calculate neighbor cell index
@@ -216,7 +222,7 @@ __global__ void acceleration_updater_d(
         acceleration[particle_pos]     = forces[particle_pos]     / mass;
         acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
         acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
-    }
+}
 
 
 __global__ void resetCells(int* cells, int total_cells) {
