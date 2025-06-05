@@ -1,5 +1,6 @@
 //write a quick test for the parser
 #include <iostream>
+#include <tuple>
 #include <cmath>
 #include <vector>
 #include <string>
@@ -41,7 +42,7 @@ int main(int argc, char** argv) {
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
     int numParticles = 0;
-    int useAcc = 1;
+    int useAcc = 0;
 
     
     // Call the parser
@@ -249,6 +250,16 @@ if (positions_old.size() % 3 != 0) {
     std::cout << "Elapsed time on GPU: " << std::chrono::duration<double>(elapsed).count() << " seconds" << std::endl;
     
     std::cout << "Simulation complete!" << std::endl;
+
+    double elapsed_seconds = std::chrono::duration<double>(elapsed).count();
+    // Append runtime to a file for later plotting
+    std::ofstream runtime_file("runtimes.txt", std::ios::app);
+    if (runtime_file.is_open()) {
+        runtime_file << configFile << ": "<< elapsed_seconds << std::endl;
+        runtime_file.close();
+    } else {
+        std::cerr << "Could not open runtimes.txt for writing!" << std::endl;
+    }
 
     // Free device memory
     cudaFree(positions_old_d);

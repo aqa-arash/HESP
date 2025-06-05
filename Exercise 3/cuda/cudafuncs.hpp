@@ -60,7 +60,7 @@ __device__ void ij_forces_d(double * forces, double * distances, double sigma, d
         forces[2] = 0.0;
     }
     else {
-    double r6 = pow(sigma / r, 6);
+    double r6 = pow(sigma / r, 6.0);
     double force_multiplier = 24 * epsilon * r6 * (2 * r6 - 1) /(r*r);
     forces[0] = force_multiplier * distances[0];
     forces[1] = force_multiplier * distances[1];
