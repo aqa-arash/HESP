@@ -72,7 +72,7 @@ __device__ void ij_forces_d(double * forces, double * distances, double sigma, d
 
 
 __global__ void update_positions_d(double * positions_new, double* positions_old , double * velocities_old, 
-    double * accelerations, double dt, double boxSize, int numParticles) {
+    double * accelerations, double * radii, double dt, double boxSize, int numParticles, int boundaryType) {
     int particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if ( particle_idx >= numParticles ) return;
     
@@ -86,8 +86,20 @@ __global__ void update_positions_d(double * positions_new, double* positions_old
                                     + 0.5 * accelerations[particle_idx + 2] * dt * dt;
 
     if (boxSize>0.000000001){ // to prevent numerical errors 
-    // Check periodic boundaries
+    if (boundaryType == 0) { // Periodic boundary conditions
+        // Check periodic boundaries
         checkPeriodicBoundaries_d(positions_new + particle_idx, positions_new + particle_idx + 1, positions_new + particle_idx + 2, boxSize);
+    }
+    else if (boundaryType == 1) { // fixed boundary conditions
+        // Check fixed boundaries
+        if (positions_new[particle_idx] < 0.0+ radii[particle_idx/3]) positions_new[particle_idx] = 0.0 +radii[particle_idx/3];
+        if (positions_new[particle_idx + 1] < 0.0 +radii[particle_idx/3]) positions_new[particle_idx + 1] = 0.0+radii[particle_idx/3];
+        if (positions_new[particle_idx + 2] < 0.0+radii[particle_idx/3]) positions_new[particle_idx + 2] = 0.0+radii[particle_idx/3];
+
+        if (positions_new[particle_idx] > boxSize-radii[particle_idx/3]) positions_new[particle_idx] = boxSize -radii[particle_idx/3];
+        if (positions_new[particle_idx + 1] > boxSize-radii[particle_idx/3]) positions_new[particle_idx + 1] = boxSize-radii[particle_idx/3];
+        if (positions_new[particle_idx + 2] > boxSize-radii[particle_idx/3]) positions_new[particle_idx + 2] = boxSize-radii[particle_idx/3];
+    }
     }
 }
 
@@ -232,6 +244,9 @@ __global__ void acceleration_updater_d(
                                 ij_forces_d(ij_force, distances, sigma, epsilon, cutoffRadius);
                             } else if (forceModel >= 1) { // Spring-Damper model
                                 double radii_temp[2] = {radii[particle_idx], radii[j]};
+                                velocities_temp[3] = velocities[j * 3];
+                                velocities_temp[4] = velocities[j * 3 + 1];
+                                velocities_temp[5] = velocities[j * 3 + 2];
                                 /*
                                 if (threadIdx.x == 0 && blockIdx.x == 0) {
                                     printf("SpringDashpot: particle %d interacting with %d\n", particle_idx, j);

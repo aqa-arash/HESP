@@ -46,12 +46,13 @@ int main(int argc, char** argv) {
     
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
-    int numParticles = 0;
+    int numParticles = 0, boundaryType = 0; // 0 for periodic, 1 for reflecting, 2 for fixed
     int useAcc = 1, forceModel = 0; // 0 for Lennard-Jones, 1 for Spring, 2 for Gravity+spring
 
     
     // Call the parser
-    parseConfigFile(configFile, positions_old, velocities_old, masses, radii, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval, useAcc, forceModel);
+    parseConfigFile(configFile, positions_old, velocities_old, masses, radii, boxSize, cutoffRadius,
+         timeStepLength, timeStepCount, sigma, epsilon, printInterval, useAcc, forceModel,boundaryType);
 
     // Output the parsed data
     std::cout << "Parsed Data:" << std::endl;
@@ -72,6 +73,19 @@ int main(int argc, char** argv) {
         std::cout << "Spring" << std::endl;
     } else if (forceModel==2) {
         std::cout << "Gravity + Spring" << std::endl;
+    }
+
+    std::cout << "Boundary Type: ";
+    if (boundaryType == 0) {
+        std::cout << "Periodic" << std::endl;
+    } else if (boundaryType == 1) {
+        std::cout << "Fixed" << std::endl;
+    } else if (boundaryType == 2) {
+        std::cout << "Not implemented yet" << std::endl;
+    }
+    if (boundaryType ==1 && boxSize == 0.0) {
+        std::cerr << "Error: Box size must be greater than 0 for reflecting boundaries. Exiting simulation." << std::endl;
+        return -1;
     }
 
     // Check if the parsed data is valid
@@ -161,6 +175,7 @@ if (positions_old.size() % 3 != 0) {
     // prepare the device kernel launch parameters
     dim3 blockSize(256);
     dim3 gridSize((masses.size() + blockSize.x - 1) / blockSize.x);
+    dim3 cellGridSize((total_cells + blockSize.x - 1) / blockSize.x);
     // launch the kernel to check periodic boundaries
 
 
@@ -173,7 +188,7 @@ if (positions_old.size() % 3 != 0) {
         //std::cout << "Time step: " << timestep << std::endl;
         //std::cout<< "updating positions and velocities"<< std::endl;
         update_positions_d<<<gridSize, blockSize>>>( positions_new_d, positions_old_d, 
-            velocities_old_d, accelerations_d, timeStepLength, boxSize, numParticles);
+            velocities_old_d, accelerations_d, radii_d, timeStepLength, boxSize, numParticles, boundaryType);
         CUDA_CHECK(cudaGetLastError());        
         update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
              accelerations_d, timeStepLength, numParticles);
@@ -189,10 +204,9 @@ if (positions_old.size() % 3 != 0) {
         // Reset cells to -1
         if (num_cells > 0) {
             // If there are only neighbor cells, we don't need to compute particle cells
-            resetCells<<<total_cells, blockSize>>>(cells_d, total_cells); // should we lunch less blocks ? 
+            resetCells<<<cellGridSize, blockSize>>>(cells_d, total_cells); // should we lunch less blocks ? 
             
             CUDA_CHECK(cudaGetLastError());
-
             CUDA_CHECK(cudaDeviceSynchronize());
             
             computeParticleCells<<<gridSize, blockSize>>>(

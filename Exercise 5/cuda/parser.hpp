@@ -113,7 +113,8 @@ void parseVTKFile(const std::string& filename, std::vector<double>& positions,
 
 void parseConfigFile(const std::string& filename, std::vector<double>& positions,
                std::vector<double>& velocities, std::vector<double>& masses, std::vector<double>& radii, double & boxSize, double& cutoffRadius,
-               double& timeStepLength, double & timeStepCount, double & sigma, double & epsilon , int & printInterval, int & useAcc, int & forceModel) 
+               double& timeStepLength, double & timeStepCount, double & sigma, double & epsilon ,
+                int & printInterval, int & useAcc, int & forceModel ,  int & boundaryType) 
                {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -149,6 +150,8 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
         } 
          else if (key == "force" && line.find("model:") != std::string::npos) { // force model, 0 for lj, 1 for spring damper, 2 for spring damper + gravity
             forceModel = std::stoi(line.substr(line.find("model:") + 6));
+        } else if (key == "boundary" && line.find("type:") != std::string::npos) { 
+            boundaryType = std::stoi(line.substr(line.find("type:") + 5));
         } 
         // box size, if 0 then disabled
         else if (key == "box" && line.find("size:") != std::string::npos) {
