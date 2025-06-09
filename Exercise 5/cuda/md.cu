@@ -14,6 +14,12 @@
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include <cublas_v2.h>
+/*
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+#include <thrust/extrema.h>
+*/
 
 #define CUDA_CHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line)
@@ -36,16 +42,16 @@ int main(int argc, char** argv) {
     }
     // Test file name
     // Variables to hold parsed data
-    std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces;
+    std::vector<double> positions_old, velocities_old, masses, positions_new, velocities_new, accelerations, forces, radii;
     
     double timeStepLength = 0.0, timeStepCount = 0.0, sigma = 0.0, epsilon = 0.0, boxSize = 0.0, cutoffRadius =0.0;
     int printInterval = 0;
     int numParticles = 0;
-    int useAcc = 1;
+    int useAcc = 1, forceModel = 0; // 0 for Lennard-Jones, 1 for Spring, 2 for Gravity+spring
 
     
     // Call the parser
-    parseConfigFile(configFile, positions_old, velocities_old, masses, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval, useAcc);
+    parseConfigFile(configFile, positions_old, velocities_old, masses, radii, boxSize, cutoffRadius, timeStepLength, timeStepCount, sigma, epsilon, printInterval, useAcc, forceModel);
 
     // Output the parsed data
     std::cout << "Parsed Data:" << std::endl;
@@ -59,6 +65,14 @@ int main(int argc, char** argv) {
     numParticles = positions_old.size()/3;
     std::cout << "Number of particles: " << numParticles << std::endl;
     std::cout << "Use acceleration: " << useAcc << std::endl;
+    std::cout << "Force Model: " ;
+    if (forceModel==0) {
+        std::cout << "Lennard-Jones" << std::endl;
+    } else if (forceModel==1) {
+        std::cout << "Spring" << std::endl;
+    } else if (forceModel==2) {
+        std::cout << "Gravity + Spring" << std::endl;
+    }
 
     // Check if the parsed data is valid
     if (sigma <= 0.0 || epsilon <= 0.0) {
@@ -88,15 +102,9 @@ if (positions_old.size() % 3 != 0) {
     positions_new.resize(positions_old.size(), 0.0);
     velocities_new.resize(positions_old.size(), 0.0);
     
-    //for each element calculate the forces
-    for (size_t i = 0; i < positions_old.size(); i += 3) {
-        force_updater(i, positions_old, forces, sigma, epsilon, boxSize);
-        acceleration_calculator(i, forces, accelerations, masses);
-
-    }
 
     //initialize the values on device
-    double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d;
+    double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d, *radii_d;
     double *positions_new_d, *velocities_new_d;
     int *cells_d;
     int *particleCell_d;
@@ -104,6 +112,9 @@ if (positions_old.size() % 3 != 0) {
     // calculate the cell size and number of cells
     double cell_size;
     int num_cells;
+    if (forceModel >=1){
+        cutoffRadius = 2 * getMax(radii);
+    }
     // if boxSize is 0.0 or cutoffRadius is 0.0, set num_cells to 1 and cell_size to boxSize
     // otherwise find the minimal divisor of cutoffRadius and boxSize
     if (boxSize == 0.0 || cutoffRadius == 0.0 || useAcc == 0) {
@@ -127,6 +138,7 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMalloc(&forces_d, forces.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&accelerations_d, accelerations.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&masses_d, masses.size() * sizeof(double)));
+    CUDA_CHECK( cudaMalloc(&radii_d, radii.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&positions_new_d, positions_new.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&velocities_new_d, velocities_new.size() * sizeof(double)));
     CUDA_CHECK( cudaMalloc(&particleCell_d, numParticles * sizeof(int)));
@@ -138,6 +150,7 @@ if (positions_old.size() % 3 != 0) {
     CUDA_CHECK( cudaMemcpy(forces_d, forces.data(), forces.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(accelerations_d, accelerations.data(), accelerations.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(masses_d, masses.data(), masses.size() * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK( cudaMemcpy(radii_d, radii.data(), radii.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(positions_new_d, positions_new.data(), positions_new.size() * sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK( cudaMemcpy(velocities_new_d, velocities_new.data(), velocities_new.size() * sizeof(double), cudaMemcpyHostToDevice));
 
@@ -174,9 +187,14 @@ if (positions_old.size() % 3 != 0) {
 
         // Build up linked neighbor list
         // Reset cells to -1
-        if (num_cells > 3) {
+        if (num_cells > 0) {
             // If there are only neighbor cells, we don't need to compute particle cells
             resetCells<<<total_cells, blockSize>>>(cells_d, total_cells); // should we lunch less blocks ? 
+            
+            CUDA_CHECK(cudaGetLastError());
+
+            CUDA_CHECK(cudaDeviceSynchronize());
+            
             computeParticleCells<<<gridSize, blockSize>>>(
                 positions_old_d,
                 cells_d,
@@ -186,6 +204,10 @@ if (positions_old.size() % 3 != 0) {
                 total_cells,
                 cell_size
             );
+
+            CUDA_CHECK(cudaGetLastError());
+
+            CUDA_CHECK(cudaDeviceSynchronize());
             
             /* debugging code to print particleCell_d and cells_d{
             // Copy particleCell_d and cells_d from device to host and print them
@@ -213,8 +235,9 @@ if (positions_old.size() % 3 != 0) {
         
         //std::cout << " Calculating Forces and accelerations"<< std::endl;
         // update forces and accelerations
-        acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
-            forces_d, masses_d, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells_d, particleCell_d, num_cells);
+
+        acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d, velocities_new_d, positions_old_d, 
+            forces_d, masses_d, radii_d, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells_d, particleCell_d, num_cells, forceModel);
         CUDA_CHECK(cudaGetLastError());
 
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -241,7 +264,7 @@ if (positions_old.size() % 3 != 0) {
             CUDA_CHECK(cudaDeviceSynchronize());
     
             std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
-            writeVTKFile(outputFile, positions_old, velocities_old, masses);
+            writeVTKFile(outputFile, positions_old, velocities_old, masses, radii);
         }
     }
     auto end = std::chrono::high_resolution_clock::now();
