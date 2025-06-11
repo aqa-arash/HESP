@@ -6,8 +6,10 @@
 #include <fstream>
 #include <math.h>
 #include <cmath>
-#include "parser.hpp"
 #include <chrono>
+#include <thread>
+// includes headers 
+#include "parser.hpp"
 #include "cpufuncs.hpp"
 // cuda includes
 #include "cudafuncs.hpp"
@@ -178,6 +180,7 @@ if (positions_old.size() % 3 != 0) {
     dim3 cellGridSize((total_cells + blockSize.x - 1) / blockSize.x);
     // launch the kernel to check periodic boundaries
 
+    std::thread vtk_writer; // Declare outside the loop
 
     //loop for GPU
     std::cout << "Starting time loop for GPU ..." << std::endl;
@@ -270,6 +273,9 @@ if (positions_old.size() % 3 != 0) {
         // print to file every printInterval steps
         if (printInterval > 0 && timestep % printInterval == 0) {
             // cout
+            if (vtk_writer.joinable()) {
+               vtk_writer.join();
+            }
             std::cout << "writing iteration " << timestep<<" to file"<< std::endl;
             cudaMemcpy(positions_old.data(), positions_old_d, positions_old.size() * sizeof(double), cudaMemcpyDeviceToHost);
             CUDA_CHECK(cudaGetLastError());
@@ -278,8 +284,8 @@ if (positions_old.size() % 3 != 0) {
             CUDA_CHECK(cudaDeviceSynchronize());
     
             std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
-            writeVTKFile(outputFile, positions_old, velocities_old, masses, radii);
-        }
+            vtk_writer = std::thread(writeVTKFile, outputFile, positions_old, velocities_old, masses, radii);
+          }
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed = end - start;
@@ -298,6 +304,9 @@ if (positions_old.size() % 3 != 0) {
     cudaFree(cells_d);
     cudaFree(particleCell_d);
     
+         if (vtk_writer.joinable()) {
+               vtk_writer.join();
+            }
     
     return 0;
 }
