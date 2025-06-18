@@ -22,3 +22,6 @@ config10k_co_acc.txt: 3.89232
 config10k_co.txt: 118.787
 config10k_co.txt: 118.659
 config10k_co.txt: 118.491
+config.txt: 0.46302
+config.txt: 0.471568
+configCircle.txt: 24.7513
