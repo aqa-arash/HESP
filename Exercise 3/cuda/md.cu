@@ -89,13 +89,6 @@ if (positions_old.size() % 3 != 0) {
     positions_new.resize(positions_old.size(), 0.0);
     velocities_new.resize(positions_old.size(), 0.0);
     
-    //for each element calculate the forces
-    for (size_t i = 0; i < positions_old.size(); i += 3) {
-        force_updater(i, positions_old, forces, sigma, epsilon, boxSize);
-        acceleration_calculator(i, forces, accelerations, masses);
-
-    }
-
     //initialize the values on device
     double *positions_old_d, *velocities_old_d, *forces_d, *accelerations_d, *masses_d;
     double *positions_new_d, *velocities_new_d;
@@ -148,26 +141,57 @@ if (positions_old.size() % 3 != 0) {
 
     // prepare the device kernel launch parameters
     dim3 blockSize(256);
-    dim3 gridSize((masses.size() + blockSize.x - 1) / blockSize.x);
+    dim3 gridSize((numParticles + blockSize.x - 1) / blockSize.x);
+    dim3 cellGridSize((total_cells + blockSize.x - 1) / blockSize.x);
     // launch the kernel to check periodic boundaries
+    resetCells<<<cellGridSize, blockSize>>>(cells_d, total_cells); // should we launch less blocks ? 
+    CUDA_CHECK(cudaGetLastError());
 
+    computeParticleCells<<<gridSize, blockSize>>>(
+                positions_old_d,
+                cells_d,
+                particleCell_d,
+                numParticles,
+                num_cells,
+                total_cells,
+                cell_size
+            );
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
 
     //loop for GPU
     std::cout << "Starting time loop for GPU ..." << std::endl;
     // time loop
-    auto start = std::chrono::high_resolution_clock::now();
+    auto positions_total = std::chrono::duration<double>::zero();
+    int positions_count = 0;
+    auto velocities_total = std::chrono::duration<double>::zero();
+    int velocities_count = 0;
+    auto forces_and_accelerations_total = std::chrono::duration<double>::zero();
+    int forces_and_accelerations_count = 0;
+
+
+    auto total_start = std::chrono::high_resolution_clock::now();
     for (int timestep = 0; timestep < timeStepCount; ++timestep) {
         // cout
         //std::cout << "Time step: " << timestep << std::endl;
         //std::cout<< "updating positions and velocities"<< std::endl;
+        auto positions_start = std::chrono::high_resolution_clock::now();
         update_positions_d<<<gridSize, blockSize>>>( positions_new_d, positions_old_d, 
             velocities_old_d, accelerations_d, timeStepLength, boxSize, numParticles);
-        CUDA_CHECK(cudaGetLastError());        
+        CUDA_CHECK(cudaGetLastError());      
+        CUDA_CHECK(cudaDeviceSynchronize());
+        auto positions_end = std::chrono::high_resolution_clock::now();
+        positions_total += positions_end - positions_start;
+        positions_count++;
+        
+        auto velocities_start = std::chrono::high_resolution_clock::now();
         update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
              accelerations_d, timeStepLength, numParticles);
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());
-
+        auto velocities_end = std::chrono::high_resolution_clock::now();
+        velocities_total += velocities_end - velocities_start;
+        velocities_count++;
         //std::cout<< "Positions updated"<< std::endl;
         //std::cout<< "Update complete, swapping"<< std::endl;
         std::swap(positions_old_d, positions_new_d);
@@ -175,9 +199,9 @@ if (positions_old.size() % 3 != 0) {
 
         // Build up linked neighbor list
         // Reset cells to -1
-        if (num_cells > 3) {
-            // If there are only neighbor cells, we don't need to compute particle cells
-            resetCells<<<total_cells, blockSize>>>(cells_d, total_cells); // should we lunch less blocks ? 
+        // always use the cells if (useAcc == 1) {
+        if (useAcc == 1 && timestep % 10 == 0) { // reset cells every 10th timestep
+            resetCells<<<cellGridSize, blockSize>>>(cells_d, total_cells); // should we launch less blocks ? 
             computeParticleCells<<<gridSize, blockSize>>>(
                 positions_old_d,
                 cells_d,
@@ -212,6 +236,7 @@ if (positions_old.size() % 3 != 0) {
         }*/
         }
         
+        auto forces_and_accelerations_start = std::chrono::high_resolution_clock::now();
         //std::cout << " Calculating Forces and accelerations"<< std::endl;
         // update forces and accelerations
         acceleration_updater_d<<<gridSize, blockSize>>>(accelerations_d,positions_old_d, 
@@ -219,14 +244,21 @@ if (positions_old.size() % 3 != 0) {
         CUDA_CHECK(cudaGetLastError());
 
         CUDA_CHECK(cudaDeviceSynchronize());
+        auto forces_and_accelerations_end = std::chrono::high_resolution_clock::now();
+        forces_and_accelerations_total += forces_and_accelerations_end - forces_and_accelerations_start;
+        forces_and_accelerations_count++;
         // cout
         //std::cout << "updating velocities"<< std::endl;
         // update velocities
+        auto update_velocities_start = std::chrono::high_resolution_clock::now();
         update_velocities_d<<<gridSize, blockSize>>>(velocities_new_d, velocities_old_d,
              accelerations_d, timeStepLength, numParticles);
         CUDA_CHECK(cudaGetLastError());
-
         CUDA_CHECK(cudaDeviceSynchronize());
+        auto update_velocities_end = std::chrono::high_resolution_clock::now();
+        velocities_total += update_velocities_end - update_velocities_start;
+        velocities_count++;
+
         // transfer new positions and velocities to old positions
         
         std::swap(velocities_old_d, velocities_new_d);
@@ -245,17 +277,27 @@ if (positions_old.size() % 3 != 0) {
             writeVTKFile(outputFile, positions_old, velocities_old, masses);
         }
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto elapsed = end - start;
-    std::cout << "Elapsed time on GPU: " << std::chrono::duration<double>(elapsed).count() << " seconds" << std::endl;
+    auto total_end = std::chrono::high_resolution_clock::now();
+    auto total_elapsed = total_end - total_start;
+    std::cout << "Elapsed time on GPU: " << std::chrono::duration<double>(total_elapsed).count() << " seconds" << std::endl;
+    std::cout<<"Average time for updating positions: " << std::chrono::duration<double>(positions_total).count() / positions_count << " seconds" << std::endl;
+    std::cout<<"Average time for updating velocities: " << std::chrono::duration<double>(velocities_total).count() / velocities_count << " seconds" << std::endl;
+    std::cout<<"Average time for forces and accelerations: " << std::chrono::duration<double>(forces_and_accelerations_total).count() / forces_and_accelerations_count << " seconds" << std::endl;
+    std::cout << "Total time for GPU simulation: " << std::chrono::duration<double>(total_elapsed).count() << " seconds" << std::endl;  
     
     std::cout << "Simulation complete!" << std::endl;
 
-    double elapsed_seconds = std::chrono::duration<double>(elapsed).count();
+    double total_elapsed_seconds = std::chrono::duration<double>(total_elapsed).count();
     // Append runtime to a file for later plotting
     std::ofstream runtime_file("runtimes.txt", std::ios::app);
     if (runtime_file.is_open()) {
-        runtime_file << configFile << ": "<< elapsed_seconds << std::endl;
+        runtime_file << "----------------------------------------" << std::endl;
+        runtime_file << "Configuration File: " << configFile << std::endl;
+        runtime_file << "Average time for updating positions: " << std::chrono::duration<double>(positions_total).count() / positions_count << " seconds" << std::endl;
+        runtime_file << "Average time for updating velocities: " << std::chrono::duration<double>(velocities_total).count() / velocities_count << " seconds" << std::endl;
+        runtime_file << "Average time for forces and accelerations: " << std::chrono::duration<double>(forces_and_accelerations_total).count() / forces_and_accelerations_count << " seconds" << std::endl;
+        runtime_file << "Total time for GPU simulation: " << total_elapsed_seconds << " seconds" << std::endl;
+        runtime_file << "----------------------------------------" << std::endl;
         runtime_file.close();
     } else {
         std::cerr << "Could not open runtimes.txt for writing!" << std::endl;

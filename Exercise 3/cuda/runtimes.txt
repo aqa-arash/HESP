@@ -25,3 +25,10 @@ config10k_co.txt: 118.491
 config.txt: 0.46302
 config.txt: 0.471568
 configCircle.txt: 24.7513
+----------------------------------------
+Configuration File: config.txt
+Average time for updating positions: 4.37131e-05 seconds
+Average time for updating velocities: 3.5146e-05 seconds
+Average time for forces and accelerations: 4.92905e-05 seconds
+Total time for GPU simulation: 0.0468406 seconds
+----------------------------------------

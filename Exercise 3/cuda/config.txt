@@ -1,7 +1,7 @@
 # Configuration file for simulation
 # Lines starting with '#' are comments and will be ignored
 
-initialization file: initial.vtk
+initialization file: initial1000.vtk
 
 box size: 500
 time step length: 0.05
