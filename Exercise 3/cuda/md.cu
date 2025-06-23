@@ -280,9 +280,9 @@ if (positions_old.size() % 3 != 0) {
     auto total_end = std::chrono::high_resolution_clock::now();
     auto total_elapsed = total_end - total_start;
     std::cout << "Elapsed time on GPU: " << std::chrono::duration<double>(total_elapsed).count() << " seconds" << std::endl;
-    std::cout<<"Average time for updating positions: " << std::chrono::duration<double>(positions_total).count() / positions_count << " seconds" << std::endl;
-    std::cout<<"Average time for updating velocities: " << std::chrono::duration<double>(velocities_total).count() / velocities_count << " seconds" << std::endl;
-    std::cout<<"Average time for forces and accelerations: " << std::chrono::duration<double>(forces_and_accelerations_total).count() / forces_and_accelerations_count << " seconds" << std::endl;
+    std::cout << "Time for "<< positions_count<< " calls of the updating positions function: " << std::chrono::duration<double>(positions_total).count() << " seconds" << std::endl;
+    std::cout << "Time for "<< velocities_count<< " calls of the updating velocities function: " << std::chrono::duration<double>(velocities_total).count() << " seconds" << std::endl;
+    std::cout << "Time for "<< forces_and_accelerations_count<< " calls of the forces and accelerations function: " << std::chrono::duration<double>(forces_and_accelerations_total).count() << " seconds" << std::endl;
     std::cout << "Total time for GPU simulation: " << std::chrono::duration<double>(total_elapsed).count() << " seconds" << std::endl;  
     
     std::cout << "Simulation complete!" << std::endl;
@@ -293,9 +293,9 @@ if (positions_old.size() % 3 != 0) {
     if (runtime_file.is_open()) {
         runtime_file << "----------------------------------------" << std::endl;
         runtime_file << "Configuration File: " << configFile << std::endl;
-        runtime_file << "Average time for updating positions: " << std::chrono::duration<double>(positions_total).count() / positions_count << " seconds" << std::endl;
-        runtime_file << "Average time for updating velocities: " << std::chrono::duration<double>(velocities_total).count() / velocities_count << " seconds" << std::endl;
-        runtime_file << "Average time for forces and accelerations: " << std::chrono::duration<double>(forces_and_accelerations_total).count() / forces_and_accelerations_count << " seconds" << std::endl;
+        runtime_file << "Time for "<< positions_count<< " calls of the updating positions function: " << std::chrono::duration<double>(positions_total).count() << " seconds" << std::endl;
+        runtime_file << "Time for "<< velocities_count<< " calls of the updating velocities function: " << std::chrono::duration<double>(velocities_total).count() << " seconds" << std::endl;
+        runtime_file << "Time for "<< forces_and_accelerations_count<< " calls of the forces and accelerations function: " << std::chrono::duration<double>(forces_and_accelerations_total).count() << " seconds" << std::endl;
         runtime_file << "Total time for GPU simulation: " << total_elapsed_seconds << " seconds" << std::endl;
         runtime_file << "----------------------------------------" << std::endl;
         runtime_file.close();
