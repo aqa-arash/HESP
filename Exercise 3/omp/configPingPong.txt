@@ -1,0 +1,17 @@
+Elapsed time on GPU: 31240812400 seconds
+
+
+# Configuration file for simulation
+# Lines starting with '#' are comments and will be ignored
+
+initialization file: initialPingPong.vtk
+
+box size: 0.0
+time step length: 0.001
+time step count: 40000
+sigma: 3.4
+epsilon: 0.238
+
+print interval: 250
+cutoff radius: 0.0
+acceleration: 1

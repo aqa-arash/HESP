@@ -1,3 +1,5 @@
+Elapsed time on GPU: 19581293700 seconds
+
 # Configuration file for simulation
 # Lines starting with '#' are comments and will be ignored
 

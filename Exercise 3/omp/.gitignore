@@ -1,0 +1,41 @@
+# Prerequisites
+*.d
+checkpoint 1/ 
+output/
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.vtk
+
+# Exceptions: Do not ignore these VTK files
+!initialCircle.vtk
+!initialLightHeavy.vtk
+!initialPingPong.vtk
+!sphere_particle.vtk
