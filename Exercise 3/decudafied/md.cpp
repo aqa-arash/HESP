@@ -105,6 +105,21 @@ if (positions_old.size() % 3 != 0) {
                 num_cells,
                 cell_size
             );
+
+    std::cout << "Number of cells: " << total_cells << std::endl;
+    std::cout << "Cell size: " << cell_size << std::endl;
+    // print the first 10 cells
+    std::cout << "First 10 cells: ";
+    for (int i = 0; i < std::min(10, total_cells); ++i) {
+        std::cout << cells[i] << " ";
+    }
+    std::cout << std::endl;
+    // print first ten particleCell
+    std::cout << "\nFirst 10 particleCell: ";
+    for (int i = 0; i < std::min(10, numParticles); ++i) {
+        std::cout << particleCell[i] << " ";
+    }
+    std::cout << std::endl;
     
     //loop for GPU
     std::cout << "Starting time loop " << std::endl;
@@ -116,6 +131,7 @@ if (positions_old.size() % 3 != 0) {
     auto forces_and_accelerations_total = std::chrono::duration<double>::zero();
     int forces_and_accelerations_count = 0;
 
+    writeVTKFile("output/initial-output0.vtk", positions_old, velocities_old, masses);
 
     auto total_start = std::chrono::high_resolution_clock::now();
     for (int timestep = 0; timestep < timeStepCount; ++timestep) {
@@ -129,7 +145,8 @@ if (positions_old.size() % 3 != 0) {
         auto positions_end = std::chrono::high_resolution_clock::now();
         positions_total += positions_end - positions_start;
         positions_count++;
-        
+        std::swap(positions_old, positions_new);
+
         // make this run on cpu 
         auto velocities_start = std::chrono::high_resolution_clock::now();
         update_velocities(velocities_new, velocities_old,
@@ -138,11 +155,12 @@ if (positions_old.size() % 3 != 0) {
         auto velocities_end = std::chrono::high_resolution_clock::now();
         velocities_total += velocities_end - velocities_start;
         velocities_count++;
-        //std::cout<< "Positions updated"<< std::endl;
-        //std::cout<< "Update complete, swapping"<< std::endl;
-        std::swap(positions_old, positions_new);
+
         std::swap(velocities_old, velocities_new);
 
+        //std::cout<< "Positions updated"<< std::endl;
+        //std::cout<< "Update complete, swapping"<< std::endl;
+        
         // Build up linked neighbor list
         // Reset cells to -1
         // always use the cells if (useAcc == 1) {
@@ -164,6 +182,7 @@ if (positions_old.size() % 3 != 0) {
         // make this run on cpu
         acceleration_updater(accelerations,positions_old, 
             forces, masses, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells, particleCell, num_cells);
+            
         auto forces_and_accelerations_end = std::chrono::high_resolution_clock::now();
         forces_and_accelerations_total += forces_and_accelerations_end - forces_and_accelerations_start;
         forces_and_accelerations_count++;
@@ -181,6 +200,7 @@ if (positions_old.size() % 3 != 0) {
         // transfer new positions and velocities to old positions
         
         std::swap(velocities_old, velocities_new);
+        
         //std::cout<< "Loop complete"<< std::endl;
         // print to file every printInterval steps
         if (printInterval > 0 && timestep % printInterval == 0) {

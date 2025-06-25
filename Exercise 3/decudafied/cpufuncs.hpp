@@ -171,9 +171,9 @@ void acceleration_updater(
     forces[particle_pos + 2] = 0.0;
     // calculate cell x y z coordinates
     int cell_x, cell_y, cell_z;
-    double x_P = positions[3 * particle_idx + 0];
-    double y_P = positions[3 * particle_idx + 1];
-    double z_P = positions[3 * particle_idx + 2];
+    double x_P = positions[particle_pos + 0];
+    double y_P = positions[particle_pos + 1];
+    double z_P = positions[particle_pos + 2];
 
     // Compute integer cell indices (with periodic boundary conditions)
     double cell_size = boxSize / num_cells; // Assuming cubic cells
@@ -181,6 +181,8 @@ void acceleration_updater(
     cell_y = ((int)(y_P / cell_size)) % num_cells;
     cell_z = ((int)(z_P / cell_size)) % num_cells;
     
+    //  loop through neighboring cells
+    // Note: We use a 3x3x3 grid of neighboring cells, including the current cell.
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             for (int z = -1; z <= 1; z++) {
