@@ -255,8 +255,8 @@ void update_positions(std::vector<double> & positions_new, const std::vector<dou
 
 void update_velocities(std::vector<double> & velocities_new, const std::vector<double> & velocities_old , 
     const std::vector<double> & accelerations, double dt, int numParticles) {
-    for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-        particle_idx *= 3;
+    for (int i = 0; i < numParticles; ++i) {
+        int particle_idx = 3* i;
         
         velocities_new[particle_idx] = velocities_old[particle_idx] + 0.5 * accelerations[particle_idx] * dt;
         velocities_new[particle_idx + 1] = velocities_old[particle_idx + 1] +  0.5 * accelerations[particle_idx + 1] * dt;
