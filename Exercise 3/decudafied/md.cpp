@@ -131,18 +131,6 @@ if (positions_old.size() % 3 != 0) {
     auto forces_and_accelerations_total = std::chrono::duration<double>::zero();
     int forces_and_accelerations_count = 0;
 
-/////////////////////////////// debugging
-    writeVTKFile("output/initial-output0.vtk", positions_old, velocities_old, masses);
-
-        update_positions( positions_new, positions_old, 
-            velocities_old, accelerations, timeStepLength, boxSize, numParticles);
-  
-        writeVTKFile("output/positions-output.vtk", positions_new, velocities_old, masses);
-
-////////////////////////////////////////
-
-
-
 
     auto total_start = std::chrono::high_resolution_clock::now();
     for (int timestep = 0; timestep < timeStepCount; ++timestep) {
@@ -151,14 +139,11 @@ if (positions_old.size() % 3 != 0) {
         //std::cout<< "updating positions and velocities"<< std::endl;
         auto positions_start = std::chrono::high_resolution_clock::now();
         // make this run on cpu 
-        writeVTKFile("output/initial-output0.vtk", positions_old, velocities_old, masses);
-
         update_positions( positions_new, positions_old, 
             velocities_old, accelerations, timeStepLength, boxSize, numParticles);
         auto positions_end = std::chrono::high_resolution_clock::now();
         positions_total += positions_end - positions_start;
         positions_count++;
-        writeVTKFile("output/positions-output" + std::to_string(timestep) + ".vtk", positions_new, velocities_old, masses);
         std::swap(positions_old, positions_new);
 
         // make this run on cpu 
