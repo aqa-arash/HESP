@@ -236,18 +236,28 @@ void update_positions(std::vector<double> & positions_new, const std::vector<dou
     const std::vector<double> & accelerations, double dt, double boxSize, int numParticles) {
 
     for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-        particle_idx *= 3;
-        positions_new[particle_idx] = positions_old[particle_idx] + velocities_old[particle_idx] * dt 
-                                    + 0.5 * accelerations[particle_idx] * dt * dt;
-        positions_new[particle_idx + 1] = positions_old[particle_idx + 1] + velocities_old[particle_idx + 1] * dt 
-                                    + 0.5 * accelerations[particle_idx + 1] * dt * dt;
-        positions_new[particle_idx + 2] = positions_old[particle_idx + 2] + velocities_old[particle_idx + 2] * dt 
-                                    + 0.5 * accelerations[particle_idx + 2] * dt * dt;
+        int particle_pos = 3* particle_idx;
+        positions_new[particle_pos] = positions_old[particle_pos] + velocities_old[particle_pos] * dt 
+                                    + 0.5 * accelerations[particle_pos] * dt * dt;
+        positions_new[particle_pos + 1] = positions_old[particle_pos + 1] + velocities_old[particle_pos + 1] * dt 
+                                    + 0.5 * accelerations[particle_pos + 1] * dt * dt;
+        positions_new[particle_pos + 2] = positions_old[particle_pos + 2] + velocities_old[particle_pos + 2] * dt 
+                                    + 0.5 * accelerations[particle_pos + 2] * dt * dt;
 
     if (boxSize>0.000000001){ // to prevent numerical errors 
     // Check periodic boundaries
-        checkPeriodicBoundaries(positions_new [ particle_idx], positions_new [ particle_idx + 1], positions_new [ particle_idx + 2], boxSize);
+    //open a log file and log the index of the particle and its position
+    if (positions_new[particle_pos] < 0.0 || positions_new[particle_pos] > boxSize ||
+        positions_new[particle_pos + 1] < 0.0 || positions_new[particle_pos + 1] > boxSize ||
+        positions_new[particle_pos + 2] < 0.0 || positions_new[particle_pos + 2] > boxSize) {
+        std::cerr << "Particle " << particle_pos / 3 << " out of bounds: "
+                  << "x: " << positions_new[particle_pos] << ", "
+                  << "y: " << positions_new[particle_pos + 1] << ", "
+                  << "z: " << positions_new[particle_pos + 2] << std::endl;
+
+        checkPeriodicBoundaries(positions_new [ particle_pos], positions_new [ particle_pos + 1], positions_new [ particle_pos + 2], boxSize);
     }
+}
 }
 }
 

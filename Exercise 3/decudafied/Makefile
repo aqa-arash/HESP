@@ -1,6 +1,6 @@
 # Compiler and flags
 COMPILER := g++
-COMPULERCFLAGS := -O3 
+COMPULERCFLAGS :=  
 RM := rm -f
 
 # Get architecture
