@@ -9,12 +9,31 @@
 #include <random>
 
 
-int main () {
+int main(int argc, char* argv[]) {
 
-    // declare variables
+    // declare variables with default values
     std::vector<double> positions, velocities, masses;
-    double boxSize = 500.0;
-    int numParticles = 100;
+    double boxSize = 500.0;  // default value
+    int numParticles = 1000; // default value
+    
+    // Parse command line arguments
+    if (argc == 2) {
+        // One argument: numParticles
+        numParticles = std::stoi(argv[1]);
+    } else if (argc == 3) {
+        // Two arguments: numParticles and boxSize
+        numParticles = std::stoi(argv[1]);
+        boxSize = std::stod(argv[2]);
+    } else if (argc > 3) {
+        std::cerr << "Usage: " << argv[0] << " [numParticles] [boxSize]" << std::endl;
+        std::cerr << "  No arguments: uses defaults (1000 particles, boxSize=500.0)" << std::endl;
+        std::cerr << "  One argument: numParticles (boxSize=500.0)" << std::endl;
+        std::cerr << "  Two arguments: numParticles boxSize" << std::endl;
+        return 1;
+    }
+    
+    std::cout << "Using numParticles = " << numParticles << ", boxSize = " << boxSize << std::endl;
+    
     std::default_random_engine generator;
     std::uniform_real_distribution<double> distribution(-0.1, 0.1);
 
@@ -51,7 +70,7 @@ int main () {
     }
 
     // write to file
-    std::string file ="initial/initial100.vtk";
+    std::string file = "initial/initial" + std::to_string(numParticles) + "_" + std::to_string((int)boxSize) + ".vtk";
     writeVTKFile(file, positions, velocities, masses);
     
 }
