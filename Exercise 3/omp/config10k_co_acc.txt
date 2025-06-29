@@ -1,14 +1,14 @@
 # Configuration file for simulation
 # Lines starting with '#' are comments and will be ignored
 
-initialization file: initialCircle.vtk
+initialization file: initial/initial10000.vtk
 
 box size: 500
-time step length: 0.0001
-time step count: 20000
+time step length: 0.05
+time step count: 100
 sigma: 3.4
 epsilon: 0.238
 
-print interval: 250
-cutoff radius: 8.5
+print interval: 10
+cutoff radius: 8.0
 acceleration: 1

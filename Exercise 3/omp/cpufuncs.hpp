@@ -103,6 +103,7 @@ void ij_forces(std::vector<double> & forces,const std::vector<double> & distance
 
 // resetCells function to reset the cells array
 void resetCells_h(std::vector<int> & cells) {
+    #pragma omp target teams distribute parallel for
     for (size_t idx = 0; idx < cells.size(); ++idx) {
         // Reset each cell to -1
         cells[idx] = -1;
@@ -111,38 +112,42 @@ void resetCells_h(std::vector<int> & cells) {
 
 
 void computeParticleCells_h(
-    const std::vector<double> & positions,   // Linear array: [x0, y0, z0, x1, y1, z1, ...]
-    std::vector<int> & cells,                // Head of linked list per cell
-    std::vector<int> & particleCell,         // Linked list: next particle for each particle
-    int num_cells,             // Number of cells per dimension (cube root of total_cells)
-    double cell_size)          // Cell size (same in x, y, z)
+    const std::vector<double> & positions,
+    std::vector<int> & cells,
+    std::vector<int> & particleCell,
+    int num_cells,
+    double cell_size)
 {
-    int N = particleCell.size(); // Number of particles
+    int N = particleCell.size();
 
-    // Loop over all particles
+    #pragma omp target teams distribute parallel for
     for (int i = 0; i < N; ++i) {
-    // Access x, y, z of particle i
-    double x = positions[3 * i + 0];
-    double y = positions[3 * i + 1];
-    double z = positions[3 * i + 2];
+        // Access x, y, z of particle i
+        double x = positions[3 * i + 0];
+        double y = positions[3 * i + 1];
+        double z = positions[3 * i + 2];
 
-    // Compute integer cell indices (with periodic boundary conditions)
-    int cx = ((int)(x / cell_size)) % num_cells;
-    int cy = ((int)(y / cell_size)) % num_cells;
-    int cz = ((int)(z / cell_size)) % num_cells;
+        // Compute integer cell indices
+        int cx = ((int)(x / cell_size)) % num_cells;
+        int cy = ((int)(y / cell_size)) % num_cells;
+        int cz = ((int)(z / cell_size)) % num_cells;
 
-    if (cx < 0) cx += num_cells;
-    if (cy < 0) cy += num_cells;
-    if (cz < 0) cz += num_cells;
+        if (cx < 0) cx += num_cells;
+        if (cy < 0) cy += num_cells;
+        if (cz < 0) cz += num_cells;
 
-    // Compute 1D cell index
-    int cell_index = cx + cy * num_cells + cz * num_cells * num_cells; // Is this right for C? Or do we just need to be consecutive?
+        // Compute 1D cell index
+        int cell_index = cx + cy * num_cells + cz * num_cells * num_cells;
 
-    // !!!!!!!!! make sure in future paralelization that this is done atomically !!!!!!!!!! 
-    // Insert particle i at the front of the linked list for this cell (no need for atomic operation on CPU)
-    particleCell[i] = cells[cell_index];
-    cells[cell_index] = i;
-}
+        // ATOMIC OPERATION: Insert particle i at front of linked list
+        int old_head;
+        #pragma omp atomic capture
+        {
+            old_head = cells[cell_index];
+            cells[cell_index] = i;
+        }
+        particleCell[i] = old_head;
+    }
 }
 
 // Helper function to get cell coordinates from cell ID (assuming cubic grid)
@@ -161,66 +166,69 @@ void acceleration_updater(
     std::vector<double> & acceleration, const std::vector<double> & positions, std::vector<double> & forces, std::vector<double> & masses,  
     double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles, 
     std::vector<int> & cells, std::vector<int> &  particleCell, int num_cells)  // num_cells added as param
-{
+{    
+    #pragma omp target teams distribute parallel for
     for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-    int particle_pos = particle_idx * 3;
+        int particle_pos = particle_idx * 3;
 
-    // Reset force vector for this particle
-    forces[particle_pos] = 0.0;
-    forces[particle_pos + 1] = 0.0;
-    forces[particle_pos + 2] = 0.0;
-    // calculate cell x y z coordinates
-    int cell_x, cell_y, cell_z;
-    double x_P = positions[3 * particle_idx + 0];
-    double y_P = positions[3 * particle_idx + 1];
-    double z_P = positions[3 * particle_idx + 2];
+        // Reset force vector for this particle
+        forces[particle_pos] = 0.0;
+        forces[particle_pos + 1] = 0.0;
+        forces[particle_pos + 2] = 0.0;
+        // calculate cell x y z coordinates
+        int cell_x, cell_y, cell_z;
+        double x_P = positions[particle_pos + 0];
+        double y_P = positions[particle_pos + 1];
+        double z_P = positions[particle_pos + 2];
 
-    // Compute integer cell indices (with periodic boundary conditions)
-    double cell_size = boxSize / num_cells; // Assuming cubic cells
-    cell_x = ((int)(x_P / cell_size)) % num_cells;
-    cell_y = ((int)(y_P / cell_size)) % num_cells;
-    cell_z = ((int)(z_P / cell_size)) % num_cells;
-    
-    for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
-            for (int z = -1; z <= 1; z++) {
-                // Calculate neighbor cell index
-                int neighbor_cell_x = (cell_x + x + num_cells) % num_cells;
-                int neighbor_cell_y = (cell_y + y + num_cells) % num_cells;
-                int neighbor_cell_z = (cell_z + z + num_cells) % num_cells;
-                int neighbor_cell_index = neighbor_cell_x + 
-                                            neighbor_cell_y * num_cells + 
-                                            neighbor_cell_z * num_cells * num_cells;
+        // Compute integer cell indices (with periodic boundary conditions)
+        double cell_size = boxSize / num_cells; // Assuming cubic cells
+        cell_x = ((int)(x_P / cell_size)) % num_cells;
+        cell_y = ((int)(y_P / cell_size)) % num_cells;
+        cell_z = ((int)(z_P / cell_size)) % num_cells;
+        
+        //  loop through neighboring cells
+        // Note: We use a 3x3x3 grid of neighboring cells, including the current cell.
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    // Calculate neighbor cell index
+                    int neighbor_cell_x = (cell_x + x + num_cells) % num_cells;
+                    int neighbor_cell_y = (cell_y + y + num_cells) % num_cells;
+                    int neighbor_cell_z = (cell_z + z + num_cells) % num_cells;
+                    int neighbor_cell_index = neighbor_cell_x + 
+                                                neighbor_cell_y * num_cells + 
+                                                neighbor_cell_z * num_cells * num_cells;
 
-                // Get the first particle in this cell
-                int j = cells[neighbor_cell_index];
-                while (j != -1) {
-                    if (j != particle_idx) { // Skip self interaction
-                        // Calculate distance and forces
-                        std::vector<double> distances(3,0.0);
-                        std::vector<double> ij_force(3,0.0);
+                    // Get the first particle in this cell
+                    int j = cells[neighbor_cell_index];
+                    while (j != -1) {
+                        if (j != particle_idx) { // Skip self interaction
+                            // Calculate distance and forces
+                            std::vector<double> distances(3,0.0);
+                            std::vector<double> ij_force(3,0.0);
 
-                        distances = periodic_distance( positions[particle_pos], positions [ particle_pos + 1], positions [ particle_pos + 2],
-                                                positions [ j * 3], positions  [j * 3 + 1], positions [ j * 3 + 2], boxSize);
+                            distances = periodic_distance( positions[particle_pos], positions [ particle_pos + 1], positions [ particle_pos + 2],
+                                                    positions [ j * 3], positions  [j * 3 + 1], positions [ j * 3 + 2], boxSize);
 
-                        ij_forces(ij_force, distances, sigma, epsilon, cutoffRadius);
+                            ij_forces(ij_force, distances, sigma, epsilon, cutoffRadius);
 
-                        // Accumulate forces
-                        forces[particle_pos] += ij_force[0];
-                        forces[particle_pos + 1] += ij_force[1];
-                        forces[particle_pos + 2] += ij_force[2];
+                            // Accumulate forces
+                            forces[particle_pos] += ij_force[0];
+                            forces[particle_pos + 1] += ij_force[1];
+                            forces[particle_pos + 2] += ij_force[2];
+                        }
+                        j = particleCell[j]; // Move to next particle in the linked list
                     }
-                    j = particleCell[j]; // Move to next particle in the linked list
                 }
             }
         }
+            // Calculate acceleration by dividing force by particle mass
+            double mass = masses[particle_idx];
+            acceleration[particle_pos]     = forces[particle_pos]     / mass;
+            acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
+            acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
     }
-        // Calculate acceleration by dividing force by particle mass
-        double mass = masses[particle_idx];
-        acceleration[particle_pos]     = forces[particle_pos]     / mass;
-        acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
-        acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
-}
 }
 
 
@@ -232,30 +240,31 @@ void acceleration_updater(
 
 void update_positions(std::vector<double> & positions_new, const std::vector<double> & positions_old , const std::vector<double> & velocities_old, 
     const std::vector<double> & accelerations, double dt, double boxSize, int numParticles) {
-
+    
     #pragma omp target teams distribute parallel for
     for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-        int idx = particle_idx * 3;
-        positions_new[idx]     = positions_old[idx]     + velocities_old[idx]     * dt + 0.5 * accelerations[idx]     * dt * dt;
-        positions_new[idx + 1] = positions_old[idx + 1] + velocities_old[idx + 1] * dt + 0.5 * accelerations[idx + 1] * dt * dt;
-        positions_new[idx + 2] = positions_old[idx + 2] + velocities_old[idx + 2] * dt + 0.5 * accelerations[idx + 2] * dt * dt;
+        int particle_pos = 3* particle_idx;
+        positions_new[particle_pos] = positions_old[particle_pos] + velocities_old[particle_pos] * dt 
+                                    + 0.5 * accelerations[particle_pos] * dt * dt;
+        positions_new[particle_pos + 1] = positions_old[particle_pos + 1] + velocities_old[particle_pos + 1] * dt 
+                                    + 0.5 * accelerations[particle_pos + 1] * dt * dt;
+        positions_new[particle_pos + 2] = positions_old[particle_pos + 2] + velocities_old[particle_pos + 2] * dt 
+                                    + 0.5 * accelerations[particle_pos + 2] * dt * dt;
 
-        if (boxSize > 0.000000001) {
-            // Check periodic boundaries
-            // Inline the periodic boundary check for GPU compatibility
-            positions_new[idx]     = fmod(fmod(positions_new[idx],     boxSize) + boxSize, boxSize);
-            positions_new[idx + 1] = fmod(fmod(positions_new[idx + 1], boxSize) + boxSize, boxSize);
-            positions_new[idx + 2] = fmod(fmod(positions_new[idx + 2], boxSize) + boxSize, boxSize);
-        }
-    }
+    if (boxSize>0.000000001){ // to prevent numerical errors 
+    // Check periodic boundaries
+        checkPeriodicBoundaries(positions_new [ particle_pos], positions_new [ particle_pos + 1], positions_new [ particle_pos + 2], boxSize);
+}
+}
 }
 
 
 
 void update_velocities(std::vector<double> & velocities_new, const std::vector<double> & velocities_old , 
     const std::vector<double> & accelerations, double dt, int numParticles) {
-    for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-        particle_idx *= 3;
+    #pragma omp target teams distribute parallel for
+    for (int i = 0; i < numParticles; ++i) {
+        int particle_idx = 3* i;
         
         velocities_new[particle_idx] = velocities_old[particle_idx] + 0.5 * accelerations[particle_idx] * dt;
         velocities_new[particle_idx + 1] = velocities_old[particle_idx + 1] +  0.5 * accelerations[particle_idx + 1] * dt;
