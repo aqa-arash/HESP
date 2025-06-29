@@ -34,8 +34,12 @@ def load_performance_data(file_path):
 
 def create_performance_plot():
     """
-    Create performance comparison plot with logarithmic axes
+    Create performance comparison plot with logarithmic axes for total time
     """
+    # Create output directory if it doesn't exist
+    output_dir = Path('performance_plots')
+    output_dir.mkdir(exist_ok=True)
+    
     # Define file paths
     files = {
         'CUDA': 'cuda/cuda_performance_results.txt',
@@ -84,7 +88,7 @@ def create_performance_plot():
     # Customize the plot
     plt.xlabel('Number of Particles', fontsize=14, fontweight='bold')
     plt.ylabel('Running Time [s]', fontsize=14, fontweight='bold')
-    plt.title('MD Simulation Performance Comparison\n(Log-Log Scale)', 
+    plt.title('MD Simulation Performance Comparison - Total Time\n(Log-Log Scale)', 
               fontsize=16, fontweight='bold', pad=20)
     
     # Grid
@@ -127,9 +131,117 @@ def create_performance_plot():
     plt.tight_layout()
     
     # Save plot
-    output_file = 'performance_comparison.png'
+    output_file = output_dir / 'total_time_comparison.png'
     plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"\nPlot saved as: {output_file}")
+    print(f"\nTotal time plot saved as: {output_file}")
+    
+    # Show plot
+    plt.show()
+
+def create_detailed_performance_plots():
+    """
+    Create detailed performance comparison plots for individual components
+    """
+    # Create output directory if it doesn't exist
+    output_dir = Path('performance_plots')
+    output_dir.mkdir(exist_ok=True)
+    
+    # Define file paths
+    files = {
+        'CUDA': 'cuda/cuda_performance_results.txt',
+        'OpenMP': 'omp/omp_performance_results.txt',
+        'CPU Only': 'decudafied/decudafied_performance_results.txt'
+    }
+    
+    # Load data from all files
+    data = {}
+    for label, file_path in files.items():
+        df = load_performance_data(file_path)
+        if df is not None:
+            data[label] = df
+    
+    if not data:
+        print("No data files could be loaded for detailed plots.")
+        return
+    
+    # Define the components to plot
+    components = {
+        'Update_Pos_s': 'Position Update Time',
+        'Update_Vel_s': 'Velocity Update Time', 
+        'Update_Forces_Acc_s': 'Forces & Acceleration Time'
+    }
+    
+    # Colors and markers
+    colors = {'CUDA': '#1f77b4', 'OpenMP': '#ff7f0e', 'CPU Only': '#2ca02c'}
+    markers = {'CUDA': 'o', 'OpenMP': 's', 'CPU Only': '^'}
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle('MD Simulation Performance Comparison - Component Analysis\n(Log-Log Scale)', 
+                 fontsize=16, fontweight='bold', y=1.02)
+    
+    # Plot each component
+    for idx, (component, title) in enumerate(components.items()):
+        ax = axes[idx]
+        
+        # Plot data for each version
+        for label, df in data.items():
+            if component in df.columns:
+                ax.loglog(df['Particles'], df[component], 
+                         marker=markers[label], 
+                         color=colors[label], 
+                         linewidth=2, 
+                         markersize=6,
+                         label=f'{label}',
+                         alpha=0.8)
+        
+        # Customize subplot
+        ax.set_xlabel('Number of Particles', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Running Time [s]', fontsize=12, fontweight='bold')
+        ax.set_title(title, fontsize=14, fontweight='bold', pad=15)
+        
+        # Grid
+        ax.grid(True, which="both", ls="-", alpha=0.3)
+        ax.grid(True, which="minor", ls=":", alpha=0.2)
+        
+        # Legend (only on first subplot to avoid clutter)
+        if idx == 0:
+            ax.legend(fontsize=10, loc='upper left', framealpha=0.9)
+        
+        # Add reference lines for scaling analysis
+        if data:
+            all_particles = []
+            all_times = []
+            
+            for df in data.values():
+                if component in df.columns:
+                    all_particles.extend(df['Particles'].tolist())
+                    all_times.extend(df[component].tolist())
+            
+            if all_particles and all_times:
+                x_ref = np.array([min(all_particles), max(all_particles)])
+                
+                # O(N) reference
+                y_on = x_ref * (min(all_times) / min(all_particles))
+                ax.loglog(x_ref, y_on, '--', color='gray', alpha=0.5, linewidth=1)
+                
+                # O(N²) reference  
+                y_on2 = (x_ref ** 2) * (min(all_times) / (min(all_particles) ** 2))
+                ax.loglog(x_ref, y_on2, '--', color='red', alpha=0.5, linewidth=1)
+                
+                # Add labels only on the last subplot
+                if idx == 2:
+                    ax.loglog([], [], '--', color='gray', alpha=0.5, linewidth=1, label='O(N)')
+                    ax.loglog([], [], '--', color='red', alpha=0.5, linewidth=1, label='O(N²)')
+                    ax.legend(fontsize=10, loc='upper left', framealpha=0.9)
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    # Save plot
+    output_file = output_dir / 'component_analysis_comparison.png'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
+    print(f"Component analysis plot saved as: {output_file}")
     
     # Show plot
     plt.show()
@@ -181,8 +293,13 @@ if __name__ == "__main__":
     # Print summary
     print_performance_summary()
     
-    # Create plot
-    print("\nCreating performance comparison plot...")
+    # Create total time comparison plot
+    print("\nCreating total time comparison plot...")
     create_performance_plot()
     
+    # Create detailed component analysis plots
+    print("\nCreating detailed component analysis plots...")
+    create_detailed_performance_plots()
+    
     print("\nAnalysis complete!")
+    print("All plots have been saved to the 'performance_plots' directory.")
