@@ -1,0 +1,13 @@
+# Configuration file for simulation
+# Lines starting with '#' are comments and will be ignored
+
+initialization file: sphere_particles.vtk
+
+box size: 0.0
+time step length: 0.001
+time step count: 10000
+sigma: 1.4
+epsilon: 0.238
+
+print interval: 100
+cutoff radius: 0.0
