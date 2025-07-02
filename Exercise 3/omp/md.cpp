@@ -10,9 +10,49 @@
 #include "parser.hpp"
 #include <chrono>
 #include "cpufuncs.hpp"
+#include <omp.h>  // Hinzufügen für omp_is_initial_device()
 
 
 int main(int argc, char** argv) {
+    // GPU-Test at the beginning
+    std::cout << "Testing GPU availability..." << std::endl;
+    #pragma omp target
+    {
+        if (omp_is_initial_device()) {
+            printf("Running on CPU\n");
+        } else {
+            printf("Running on GPU\n");
+        }
+    }
+
+    /*
+    // Initialize some data for the test
+    const int sz = 1000000; // Size of the arrays
+    float x[sz], y[sz];
+    // Fill the arrays with some data
+    for (int i = 0; i < sz; i++) {
+        x[i] = static_cast<float>(i) * 0.001f; // Example data for x
+        y[i] = static_cast<float>(i) * 0.002f; // Example data for y
+    }
+    double a = 3.0; // Scalar value to multiply with x
+    double t = 0.0;
+    double tb, te;
+    tb = omp_get_wtime();
+    #pragma omp target map(to:x[0:sz]) \
+        map(tofrom:y[0:sz])
+    for (int j = 0; j < 100; j++) { // Repeat the operation 100 times
+        for (int i = 0; i < sz; i++) {
+            y[i] = a * x[i] + y[i]; // Perform the operation
+        }
+    }
+    for (int i = 0; i < sz; i++) {
+        y[i] = a * x[i] + y[i];
+    }
+    te = omp_get_wtime();
+    t = te - tb;
+    printf("Time of kernel: %lf\n", t);
+    */
+    
     // Check if the correct number of arguments is provided
     std::string configFile;
     if (argc != 2) {
@@ -148,8 +188,18 @@ if (positions_old.size() % 3 != 0) {
 
         // make this run on cpu 
         auto velocities_start = std::chrono::high_resolution_clock::now();
-        update_velocities(velocities_new, velocities_old,
-             accelerations, timeStepLength, numParticles);
+        double* vel_new = velocities_new.data();
+        double* vel_old = const_cast<double*>(velocities_old.data());
+        double* acc = const_cast<double*>(accelerations.data());
+        
+        int total_size = numParticles * 3;
+
+        #pragma omp target data \
+            map(to: vel_old[0:total_size], acc[0:total_size]) \
+            map(tofrom: vel_new[0:total_size])
+        {
+            update_velocities_kernel(vel_new, vel_old, acc, timeStepLength, total_size);
+        }
 
         auto velocities_end = std::chrono::high_resolution_clock::now();
         velocities_total += velocities_end - velocities_start;
