@@ -8,112 +8,6 @@
 #include <limits>
 #include <utility>
 
-// Find the minimal d > cutoffRadius such that boxSize / d is approximately an integer
-std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
-    const double epsilon = 1e-10; // numerical tolerance for approximate integer check
-    double best_d = std::numeric_limits<double>::max();
-    int best_n = -1;
-
-    int max_n = static_cast<int>(boxSize / cutoffRadius); // maximum reasonable number of divisions
-
-    for (int n = 1; n <= max_n; ++n) {
-        double d = boxSize / n;
-
-        // Skip if d does not exceed cutoff
-        if (d < cutoffRadius)
-            continue;
-
-        // Check if boxSize / d is numerically close to an integer
-        double approx_n = boxSize / d;
-        if (std::abs(approx_n - std::round(approx_n)) < epsilon) {
-            // Update if this is the smallest valid d so far
-            if (d < best_d) {
-                best_d = d;
-                best_n = n;
-            }
-        }
-    }
-
-    if (best_n == -1) {
-        best_d = boxSize; // If no valid d found, return boxSize as default
-        best_n = 1; // and set n to 1
-    }
-
-    return {best_d, best_n};
-}
-
-// function to check and update periodic boundaries for each particle (can be globalized)
-void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
-    x = fmod(fmod(x, boxSize) + boxSize, boxSize);
-    y = fmod(fmod(y, boxSize) + boxSize, boxSize);
-    z = fmod(fmod(z, boxSize) + boxSize, boxSize);
-}
-
-
-// function to calculate the periodic distance between two particles
-// (can be globalized)
-std::vector<double> periodic_distance(double x1, double y1, double z1, double x2, double y2, double z2, double boxSize) {
-    std::vector<double> distances(3),pbc_distance(3);
-    distances[0] = x1 - x2;
-    distances[1] = y1 - y2;
-    distances[2] = z1 - z2;
-    if (boxSize>0.0){
-    // apply periodic boundary conditions
-    pbc_distance[0] = distances[0] - boxSize * std::round(distances[0] / boxSize);
-    pbc_distance[1] = distances[1] - boxSize * std::round(distances[1] / boxSize);
-    pbc_distance[2] = distances[2] - boxSize * std::round(distances[2] / boxSize);
-    }
-    return pbc_distance;
-}
-
-// function to calculate the distance size
-// (can be globalized)
-double distance_size(const std::vector<double> & distances) {
-    return std::sqrt(distances[0] * distances[0] + distances[1] * distances[1] + distances[2] * distances[2]);
-}
-
-
-
-
-// function to calculate the forces between two particles on device
-void ij_forces(std::vector<double> & forces,const std::vector<double> & distances, double sigma, double epsilon, double cutoffRadius) {
-    double r = 0.0;
-    r = distance_size(distances);
-    if (r == 0.0) {
-        printf("Error: Zero distance between particles!\n");
-        forces[0] = 0.0;
-        forces[1] = 0.0;
-        forces[2] = 0.0;
-    }
-    else if (cutoffRadius > 0.000000001 && r>cutoffRadius){ // cut off distance
-        forces[0] = 0.0;
-        forces[1] = 0.0;
-        forces[2] = 0.0;
-    }
-    else {
-    double r6 = pow(sigma / r, 6.0);
-    double force_multiplier = 24 * epsilon * r6 * (2 * r6 - 1) /(r*r);
-    forces[0] = force_multiplier * distances[0];
-    forces[1] = force_multiplier * distances[1];
-    forces[2] = force_multiplier * distances[2];
-}
-}
-
-///////////////////////////////// CELL FUNCTIONS /////////////////////////
-
-// GPU-parallelisierte resetCells Funktion
-void resetCells_h(std::vector<int> & cells) {
-    int* cell_data = cells.data();
-    size_t cell_size = cells.size();
-    
-    #pragma omp target teams distribute parallel for \
-        map(tofrom: cell_data[0:cell_size])
-    for (size_t idx = 0; idx < cell_size; ++idx) {
-        cell_data[idx] = -1;
-    }
-}
-
-// GPU-parallelisierte computeParticleCells Funktion
 void computeParticleCells_h(
     const std::vector<double> & positions,
     std::vector<int> & cells,
@@ -159,6 +53,98 @@ void computeParticleCells_h(
     }
 }
 
+// Find the minimal d > cutoffRadius such that boxSize / d is approximately an integer
+std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
+    const double epsilon = 1e-10; // numerical tolerance for approximate integer check
+    double best_d = std::numeric_limits<double>::max();
+    int best_n = -1;
+
+    int max_n = static_cast<int>(boxSize / cutoffRadius); // maximum reasonable number of divisions
+
+    for (int n = 1; n <= max_n; ++n) {
+        double d = boxSize / n;
+
+        // Skip if d does not exceed cutoff
+        if (d < cutoffRadius)
+            continue;
+
+        // Check if boxSize / d is numerically close to an integer
+        double approx_n = boxSize / d;
+        if (std::abs(approx_n - std::round(approx_n)) < epsilon) {
+            // Update if this is the smallest valid d so far
+            if (d < best_d) {
+                best_d = d;
+                best_n = n;
+            }
+        }
+    }
+
+    if (best_n == -1) {
+        best_d = boxSize; // If no valid d found, return boxSize as default
+        best_n = 1; // and set n to 1
+    }
+
+    return {best_d, best_n};
+}
+
+// function to calculate the distance size
+// (can be globalized)
+double distance_size(const std::vector<double> & distances) {
+    return std::sqrt(distances[0] * distances[0] + distances[1] * distances[1] + distances[2] * distances[2]);
+}
+
+///////////////////////////////// CELL FUNCTIONS /////////////////////////
+
+// GPU-parallelized resetCells function
+
+void resetCells_kernel(int* cell_data, size_t cell_size) {
+    #pragma omp target teams distribute parallel for
+    for (size_t idx = 0; idx < cell_size; ++idx) {
+        cell_data[idx] = -1;
+    }
+}
+
+// GPU-parallelized computeParticleCells function
+
+void computeParticleCells_kernel(
+    const double* pos,
+    int* cell_data,
+    int* particle_cell,
+    int N,
+    int num_cells,
+    double cell_size,
+    size_t total_cells) {
+    
+    #pragma omp target teams distribute parallel for
+    for (int i = 0; i < N; ++i) {
+        // Access x, y, z of particle i
+        double x = pos[3 * i + 0];
+        double y = pos[3 * i + 1];
+        double z = pos[3 * i + 2];
+
+        // Compute integer cell indices
+        int cx = ((int)(x / cell_size)) % num_cells;
+        int cy = ((int)(y / cell_size)) % num_cells;
+        int cz = ((int)(z / cell_size)) % num_cells;
+
+        if (cx < 0) cx += num_cells;
+        if (cy < 0) cy += num_cells;
+        if (cz < 0) cz += num_cells;
+
+        // Compute 1D cell index
+        int cell_index = cx + cy * num_cells + cz * num_cells * num_cells;
+
+        // ATOMIC OPERATION: Insert particle i at front of linked list
+        int old_head;
+        #pragma omp atomic capture
+        {
+            old_head = cell_data[cell_index];
+            cell_data[cell_index] = i;
+        }
+        particle_cell[i] = old_head;
+    }
+}
+
 // Helper function to get cell coordinates from cell ID (assuming cubic grid)
 void getCellCoords(int cellId, int num_cells, int &x, int &y, int &z) {
     z = cellId / (num_cells * num_cells);
@@ -171,12 +157,13 @@ void getCellCoords(int cellId, int num_cells, int &x, int &y, int &z) {
 ////////////// Acceleration Updater Functions /////////////////////////
 
 
-// GPU-kompatible Hilfsfunktionen
+// GPU-compatible helper functions
 #pragma omp declare target
 double distance_size_gpu(double dx, double dy, double dz) {
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+// function to calculate the periodic distance between two particles
 void periodic_distance_gpu(double x1, double y1, double z1, double x2, double y2, double z2, 
                           double boxSize, double* dx, double* dy, double* dz) {
     *dx = x1 - x2;
@@ -209,26 +196,13 @@ void ij_forces_gpu(double dx, double dy, double dz, double sigma, double epsilon
 }
 #pragma omp end declare target
 
-void acceleration_updater(
-    std::vector<double> & acceleration, const std::vector<double> & positions, 
-    std::vector<double> & forces, std::vector<double> & masses,  
-    double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles, 
-    std::vector<int> & cells, std::vector<int> & particleCell, int num_cells) {
+void acceleration_updater_kernel(
+    double* acc, const double* pos, double* force, const double* mass,
+    int* cell_data, int* particle_cell,
+    double sigma, double epsilon, double boxSize, double cutoffRadius,
+    int numParticles, int num_cells) {
     
-    // Rohzeiger extrahieren
-    double* acc = acceleration.data();
-    double* pos = const_cast<double*>(positions.data());
-    double* force = forces.data();
-    double* mass = const_cast<double*>(masses.data());
-    int* cell_data = cells.data();
-    int* particle_cell = particleCell.data();
-    
-    int total_size = numParticles * 3;
-    int total_cells = num_cells * num_cells * num_cells;
-    
-    #pragma omp target teams distribute parallel for \
-        map(to: pos[0:total_size], mass[0:numParticles], cell_data[0:total_cells], particle_cell[0:numParticles]) \
-        map(tofrom: force[0:total_size], acc[0:total_size])
+    #pragma omp target teams distribute parallel for
     for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
         int particle_pos = particle_idx * 3;
 
@@ -292,66 +266,34 @@ void acceleration_updater(
     }
 }
 
-// Neue GPU-kompatible Funktion für periodic boundaries
+// New GPU-compatible function for periodic boundaries
 #pragma omp declare target
-void checkPeriodicBoundariesNew(double* positions, int idx, double boxSize) {
+// function to check and update periodic boundaries for each particle (can be globalized)
+void checkPeriodicBoundaries_gpu(double* positions, int idx, double boxSize) {
     positions[idx] = fmod(fmod(positions[idx], boxSize) + boxSize, boxSize);
     positions[idx + 1] = fmod(fmod(positions[idx + 1], boxSize) + boxSize, boxSize);
     positions[idx + 2] = fmod(fmod(positions[idx + 2], boxSize) + boxSize, boxSize);
 }
 #pragma omp end declare target
 
-void update_positions(std::vector<double> & positions_new, const std::vector<double> & positions_old, 
-    const std::vector<double> & velocities_old, const std::vector<double> & accelerations, 
-    double dt, double boxSize, int numParticles) {
-
-    double* pos_new = positions_new.data();
-    double* pos_old = const_cast<double*>(positions_old.data());
-    double* vel_old = const_cast<double*>(velocities_old.data());
-    double* acc = const_cast<double*>(accelerations.data());
-    
-    int total_size = numParticles * 3;
-    
-    #pragma omp target teams distribute parallel for \
-        map(to: pos_old[0:total_size], vel_old[0:total_size], acc[0:total_size]) \
-        map(tofrom: pos_new[0:total_size])
+void update_positions_kernel(double* pos_new, const double* pos_old, 
+                           const double* vel_old, const double* acc, 
+                           double dt, int total_size) {
+    #pragma omp target teams distribute parallel for
     for (int i = 0; i < total_size; ++i) {
         pos_new[i] = pos_old[i] + vel_old[i] * dt + 0.5 * acc[i] * dt * dt;
     }
-    
-    // Periodic boundaries nach der Positionsberechnung anwenden
-    if (boxSize > 0.000000001) {
-        #pragma omp target teams distribute parallel for \
-            map(tofrom: pos_new[0:total_size])
-        for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
-            int particle_pos = 3 * particle_idx;
-            checkPeriodicBoundariesNew(pos_new, particle_pos, boxSize);
-        }
+}
+
+void apply_periodic_boundaries_kernel(double* pos_new, double boxSize, int numParticles) {
+    #pragma omp target teams distribute parallel for
+    for (int particle_idx = 0; particle_idx < numParticles; ++particle_idx) {
+        int particle_pos = 3 * particle_idx;
+        checkPeriodicBoundaries_gpu(pos_new, particle_pos, boxSize);
     }
 }
 
-
-
-void update_velocities(std::vector<double>& velocities_new, 
-    const std::vector<double>& velocities_old, 
-    const std::vector<double>& accelerations, 
-    double dt, int numParticles) {
-    
-    double* vel_new = velocities_new.data();
-    double* vel_old = const_cast<double*>(velocities_old.data());
-    double* acc = const_cast<double*>(accelerations.data());
-    
-    int total_size = numParticles * 3;
-    
-    #pragma omp target teams distribute parallel for \
-        map(to: vel_old[0:total_size], acc[0:total_size]) \
-        map(tofrom: vel_new[0:total_size])
-    for (int i = 0; i < total_size; ++i) {
-        vel_new[i] = vel_old[i] + 0.5 * acc[i] * dt;
-    }
-}
-
-// In der Header-Datei oder vor der main-Funktion:
+// In the header file or before the main function:
 void update_velocities_kernel(double* vel_new, const double* vel_old, 
                              const double* acc, double dt, int total_size) {
     #pragma omp target teams distribute parallel for

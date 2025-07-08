@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Performance Analysis Plotter for MD Simulation Comparison
-Compares CUDA, OpenMP, and CPU-only versions
+Compares CUDA, OpenMPgpu, and CPU-only versions
 """
 
 import pandas as pd
@@ -9,6 +9,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pathlib import Path
+
+def get_next_filename(output_dir, base_name, extension='.png'):
+    """
+    Get the next available numbered filename in the output directory
+    
+    Args:
+        output_dir (Path): Output directory path
+        base_name (str): Base name for the file (without extension)
+        extension (str): File extension (default: '.png')
+        
+    Returns:
+        Path: Next available numbered filename
+    """
+    counter = 1
+    while True:
+        filename = f"{base_name}_{counter:03d}{extension}"
+        filepath = output_dir / filename
+        if not filepath.exists():
+            return filepath
+        counter += 1
 
 def load_performance_data(file_path):
     """
@@ -43,7 +63,7 @@ def create_performance_plot():
     # Define file paths
     files = {
         'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMP': 'omp/omp_performance_results.txt',
+        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
         'CPU Only': 'decudafied/decudafied_performance_results.txt'
     }
     
@@ -62,8 +82,8 @@ def create_performance_plot():
     plt.figure(figsize=(12, 8))
     
     # Colors for different versions
-    colors = {'CUDA': '#1f77b4', 'OpenMP': '#ff7f0e', 'CPU Only': '#2ca02c'}
-    markers = {'CUDA': 'o', 'OpenMP': 's', 'CPU Only': '^'}
+    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'CPU Only': '#2ca02c'}
+    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'CPU Only': '^'}
     
     # Plot data for each version
     for label, df in data.items():
@@ -130,8 +150,8 @@ def create_performance_plot():
     # Tight layout
     plt.tight_layout()
     
-    # Save plot
-    output_file = output_dir / 'total_time_comparison.png'
+    # Save plot with auto-numbering
+    output_file = get_next_filename(output_dir, 'total_time_comparison')
     plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
     print(f"\nTotal time plot saved as: {output_file}")
     
@@ -149,7 +169,7 @@ def create_detailed_performance_plots():
     # Define file paths
     files = {
         'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMP': 'omp/omp_performance_results.txt',
+        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
         'CPU Only': 'decudafied/decudafied_performance_results.txt'
     }
     
@@ -172,8 +192,8 @@ def create_detailed_performance_plots():
     }
     
     # Colors and markers
-    colors = {'CUDA': '#1f77b4', 'OpenMP': '#ff7f0e', 'CPU Only': '#2ca02c'}
-    markers = {'CUDA': 'o', 'OpenMP': 's', 'CPU Only': '^'}
+    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'CPU Only': '#2ca02c'}
+    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'CPU Only': '^'}
     
     # Create figure with subplots
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -238,8 +258,8 @@ def create_detailed_performance_plots():
     # Adjust layout
     plt.tight_layout()
     
-    # Save plot
-    output_file = output_dir / 'component_analysis_comparison.png'
+    # Save plot with auto-numbering
+    output_file = get_next_filename(output_dir, 'component_analysis_comparison')
     plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
     print(f"Component analysis plot saved as: {output_file}")
     
@@ -252,7 +272,7 @@ def print_performance_summary():
     """
     files = {
         'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMP': 'omp/omp_performance_results.txt',
+        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
         'CPU Only': 'decudafied/decudafied_performance_results.txt'
     }
     
