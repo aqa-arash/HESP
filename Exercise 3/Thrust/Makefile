@@ -1,13 +1,23 @@
-# Compiler and flags
-NVCC := nvcc
-NVCCFLAGS := -O3 
-RM := rm -f
+# Compiler and flags (use environment variables or defaults)
+NVCC ?= nvcc
+CXX ?= g++
+NVCCFLAGS ?= -O3
+CXXFLAGS ?= -O3
+RM ?= rm -f
 
-# Get architecture
-ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | sed 's/\.//')
-NVARCH := sm_$(ARCH)
-NVCCFLAGS += -gencode arch=compute_$(ARCH),code=$(NVARCH)
-NVCCFLAGS += -lcublas --extended-lambda -std=c++17 --compiler-bindir=/usr/bin/gcc-9 -lcublas -lm -lstdc++
+# CUDA toolkit path (optional, set externally if needed)
+
+# CUDA compiler flags for nvcc
+NVCCFLAGS += --extended-lambda -std=c++17 -lcublas -lm -lstdc++
+
+# Alternative: If you want to use nvc++ instead of nvcc
+# NVCC ?= nvc++
+# NVCCFLAGS ?= -O3 -std=c++17 -cuda -gpu=cc80 -lcublas -lm -lstdc++
+
+# Optionally set compiler-bindir if needed
+ifdef GCC_BIN
+    NVCCFLAGS += --compiler-bindir=$(GCC_BIN)
+endif
 
 # Target executables
 TARGET := md
