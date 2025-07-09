@@ -1,0 +1,22 @@
+/var/tmp/slurmd_spool/job2848822/slurm_script: line 11: module: command not found
+/var/tmp/slurmd_spool/job2848822/slurm_script: line 12: module: command not found
+make: nvc++: Command not found
+make: *** [Makefile:50: md.o] Error 127
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU.sh: line 23: ./initialVTKmaker: No such file or directory

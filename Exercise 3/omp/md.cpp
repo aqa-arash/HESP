@@ -19,9 +19,18 @@ int main(int argc, char** argv) {
     {
         if (omp_is_initial_device()) {
             printf("Running on CPU\n");
+            printf("Number of threads: %d\n", omp_get_max_threads());
         } else {
             printf("Running on GPU\n");
         }
+    }
+
+    #pragma omp target teams distribute parallel for
+    for (int i = 0; i < 1; i++) {
+        int nteams = omp_get_num_teams();
+        int tlimit = omp_get_thread_limit();
+
+        printf("Number of teams: %d, Thread limit: %d\n", nteams, tlimit);
     }
     
     // Check if the correct number of arguments is provided
