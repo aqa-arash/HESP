@@ -52,6 +52,26 @@ def load_performance_data(file_path):
         print(f"File not found: {file_path}")
         return None
 
+# File path constants for all implementations
+CUDA_LABEL = 'CUDA'
+CUDA_FILE = 'cuda/cuda_performance_results.txt'
+OPENMPGPU_LABEL = 'OpenMPgpu'
+OPENMPGPU_FILE = 'omp/ompGPU_performance_results_alex.txt'
+OPENMPCPU_LABEL = 'OpenMPcpu'
+OPENMPCPU_FILE = 'omp_CPU/ompCPU_performance_results_fritz.txt'
+CPU_ONLY_LABEL = 'CPU Only'
+CPU_ONLY_FILE = 'decudafied/decudafied_performance_results.txt'
+
+# Enable/disable which results to plot
+cuda = False
+openmpgpu = True
+openmpcpu = True
+cpu_only = True
+
+# Enable/disable reference lines
+show_on = False
+show_on2 = False
+
 def create_performance_plot():
     """
     Create performance comparison plot with logarithmic axes for total time
@@ -60,12 +80,16 @@ def create_performance_plot():
     output_dir = Path('performance_plots')
     output_dir.mkdir(exist_ok=True)
     
-    # Define file paths
-    files = {
-        'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
-        'CPU Only': 'decudafied/decudafied_performance_results.txt'
-    }
+    # Dynamisch die zu plottenden Dateien wählen
+    files = {}
+    if cuda:
+        files[CUDA_LABEL] = CUDA_FILE
+    if openmpgpu:
+        files[OPENMPGPU_LABEL] = OPENMPGPU_FILE
+    if openmpcpu:
+        files[OPENMPCPU_LABEL] = OPENMPCPU_FILE
+    if cpu_only:
+        files[CPU_ONLY_LABEL] = CPU_ONLY_FILE
     
     # Load data from all files
     data = {}
@@ -82,8 +106,8 @@ def create_performance_plot():
     plt.figure(figsize=(12, 8))
     
     # Colors for different versions
-    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'CPU Only': '#2ca02c'}
-    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'CPU Only': '^'}
+    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'OpenMPcpu': '#9467bd', 'CPU Only': '#2ca02c'}
+    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'OpenMPcpu': 'D', 'CPU Only': '^'}
     
     # Plot data for each version
     for label, df in data.items():
@@ -136,14 +160,14 @@ def create_performance_plot():
     # Add reference lines for scaling analysis
     if data:
         x_ref = np.array([10, 50000])
-        
-        # O(N) reference
-        y_on = x_ref * (1.0 / 10)  # Normalized to pass through a reasonable point
-        plt.loglog(x_ref, y_on, '--', color='gray', alpha=0.6, linewidth=1, label='O(N)')
-        
-        # O(N²) reference
-        y_on2 = (x_ref ** 2) * (1.0 / 100)  # Normalized
-        plt.loglog(x_ref, y_on2, '--', color='red', alpha=0.6, linewidth=1, label='O(N²)')
+        if show_on:
+            # O(N) reference
+            y_on = x_ref * (1.0 / 10)  # Normalized to pass through a reasonable point
+            plt.loglog(x_ref, y_on, '--', color='gray', alpha=0.6, linewidth=1, label='O(N)')
+        if show_on2:
+            # O(N²) reference
+            y_on2 = (x_ref ** 2) * (1.0 / 100)  # Normalized
+            plt.loglog(x_ref, y_on2, '--', color='red', alpha=0.6, linewidth=1, label='O(N²)')
     
     plt.legend(fontsize=12, loc='upper left', framealpha=0.9)
     
@@ -166,12 +190,16 @@ def create_detailed_performance_plots():
     output_dir = Path('performance_plots')
     output_dir.mkdir(exist_ok=True)
     
-    # Define file paths
-    files = {
-        'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
-        'CPU Only': 'decudafied/decudafied_performance_results.txt'
-    }
+    # Dynamisch die zu plottenden Dateien wählen
+    files = {}
+    if cuda:
+        files[CUDA_LABEL] = CUDA_FILE
+    if openmpgpu:
+        files[OPENMPGPU_LABEL] = OPENMPGPU_FILE
+    if openmpcpu:
+        files[OPENMPCPU_LABEL] = OPENMPCPU_FILE
+    if cpu_only:
+        files[CPU_ONLY_LABEL] = CPU_ONLY_FILE
     
     # Load data from all files
     data = {}
@@ -192,8 +220,8 @@ def create_detailed_performance_plots():
     }
     
     # Colors and markers
-    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'CPU Only': '#2ca02c'}
-    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'CPU Only': '^'}
+    colors = {'CUDA': '#1f77b4', 'OpenMPgpu': '#ff7f0e', 'OpenMPcpu': '#9467bd', 'CPU Only': '#2ca02c'}
+    markers = {'CUDA': 'o', 'OpenMPgpu': 's', 'OpenMPcpu': 'D', 'CPU Only': '^'}
     
     # Create figure with subplots
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -232,27 +260,26 @@ def create_detailed_performance_plots():
         if data:
             all_particles = []
             all_times = []
-            
             for df in data.values():
                 if component in df.columns:
                     all_particles.extend(df['Particles'].tolist())
                     all_times.extend(df[component].tolist())
-            
             if all_particles and all_times:
                 x_ref = np.array([min(all_particles), max(all_particles)])
-                
-                # O(N) reference
-                y_on = x_ref * (min(all_times) / min(all_particles))
-                ax.loglog(x_ref, y_on, '--', color='gray', alpha=0.5, linewidth=1)
-                
-                # O(N²) reference  
-                y_on2 = (x_ref ** 2) * (min(all_times) / (min(all_particles) ** 2))
-                ax.loglog(x_ref, y_on2, '--', color='red', alpha=0.5, linewidth=1)
-                
+                if show_on:
+                    # O(N) reference
+                    y_on = x_ref * (min(all_times) / min(all_particles))
+                    ax.loglog(x_ref, y_on, '--', color='gray', alpha=0.5, linewidth=1)
+                if show_on2:
+                    # O(N²) reference  
+                    y_on2 = (x_ref ** 2) * (min(all_times) / (min(all_particles) ** 2))
+                    ax.loglog(x_ref, y_on2, '--', color='red', alpha=0.5, linewidth=1)
                 # Add labels only on the last subplot
                 if idx == 2:
-                    ax.loglog([], [], '--', color='gray', alpha=0.5, linewidth=1, label='O(N)')
-                    ax.loglog([], [], '--', color='red', alpha=0.5, linewidth=1, label='O(N²)')
+                    if show_on:
+                        ax.loglog([], [], '--', color='gray', alpha=0.5, linewidth=1, label='O(N)')
+                    if show_on2:
+                        ax.loglog([], [], '--', color='red', alpha=0.5, linewidth=1, label='O(N²)')
                     ax.legend(fontsize=10, loc='upper left', framealpha=0.9)
     
     # Adjust layout
@@ -270,11 +297,15 @@ def print_performance_summary():
     """
     Print a summary of performance data
     """
-    files = {
-        'CUDA': 'cuda/cuda_performance_results.txt',
-        'OpenMPgpu': 'omp/ompGPU_performance_results.txt',
-        'CPU Only': 'decudafied/decudafied_performance_results.txt'
-    }
+    files = {}
+    if cuda:
+        files[CUDA_LABEL] = CUDA_FILE
+    if openmpgpu:
+        files[OPENMPGPU_LABEL] = OPENMPGPU_FILE
+    if openmpcpu:
+        files[OPENMPCPU_LABEL] = OPENMPCPU_FILE
+    if cpu_only:
+        files[CPU_ONLY_LABEL] = CPU_ONLY_FILE
     
     print("\n" + "="*60)
     print("PERFORMANCE SUMMARY")
