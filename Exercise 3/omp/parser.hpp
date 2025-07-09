@@ -173,3 +173,38 @@ void writeVTKFile(const std::string& filename, const std::vector<double>& positi
     }
     file.close();
 }
+
+// VTK-Ausgabefunktion für Pointer-Daten
+void writeVTKFileNew(const std::string& filename, const double* positions,
+                  const double* velocities, const double* masses, int numParticles) {
+    std::filesystem::create_directories(std::filesystem::path(filename).parent_path());
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+    file << std::fixed << std::setprecision(10);
+
+    file << "# vtk DataFile Version 4.0" << std::endl;
+    file << "hesp visualization file" << std::endl;
+    file << "ASCII" << std::endl;
+    file << "DATASET UNSTRUCTURED_GRID" << std::endl;
+    file << "POINTS " << numParticles << " double" << std::endl;
+
+    for (int i = 0; i < numParticles; ++i) {
+        file << positions[i*3] << " " << positions[i*3+1] << " " << positions[i*3+2] << std::endl;
+    }
+    file << "CELLS 0 0" << std::endl;
+    file << "CELL_TYPES 0" << std::endl;
+    file << "POINT_DATA " << numParticles << std::endl;
+    file << "SCALARS m double" << std::endl;
+    file << "LOOKUP_TABLE default" << std::endl;
+    for (int i = 0; i < numParticles; ++i) {
+        file << masses[i] << std::endl;
+    }
+    file << "VECTORS v double" << std::endl;
+    for (int i = 0; i < numParticles; ++i) {
+        file << velocities[i*3] << " " << velocities[i*3+1] << " " << velocities[i*3+2] << std::endl;
+    }
+    file.close();
+}

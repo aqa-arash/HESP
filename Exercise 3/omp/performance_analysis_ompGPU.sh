@@ -6,7 +6,7 @@
 particle_counts=(10 20 50 100 200 500 1000 2000 5000 10000 20000)
 
 # Output file for results
-output_file="omp_performance_results.txt"
+output_file="ompGPU_performance_results.txt"
 
 # Create header for results file
 echo "Particles,Update_Pos_s,Update_Vel_s,Update_Forces_Acc_s,Total_Time_s" > "$output_file"

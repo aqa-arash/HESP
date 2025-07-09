@@ -9,6 +9,6 @@ time step count: 20000
 sigma: 3.4
 epsilon: 0.238
 
-print interval: 250
+print interval: 0
 cutoff radius: 8.5
 acceleration: 1
