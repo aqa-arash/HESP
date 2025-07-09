@@ -1,9 +1,8 @@
 #!/bin/bash
-
-# Performance Analysis Script for OpenMP GPU Code
+# Performance Analysis Script for CPU Code
 
 # Define particle counts for testing
-particle_counts=(10 20 50 100 200 500 1000 2000 5000 10000 20000 50000)
+particle_counts=(10 20 50 100 200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000 2000000 5000000)
 
 # Output file for results
 output_file="decudafied_performance_results.txt"
@@ -34,10 +33,10 @@ for num_particles in "${particle_counts[@]}"; do
 # Configuration file for simulation
 # Lines starting with '#' are comments and will be ignored
 
-initialization file: initial/initial${num_particles}_500.vtk
+initialization file: initial/initial${num_particles}_1000.vtk
 
-box size: 500
-time step length: 0.05
+box size: 1000
+time step length: 0.0001
 time step count: 50000
 sigma: 3.4
 epsilon: 0.238

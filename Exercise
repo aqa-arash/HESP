@@ -542,3 +542,27 @@ NVIDIA A100-SXM4-40GB, 00000000:13:00.0, 377847, 54 %, 3 %, 500 MiB, 6198 ms
 NVIDIA A100-SXM4-40GB, 00000000:13:00.0, 377875, 63 %, 17 %, 514 MiB, 8797 ms
 NVIDIA A100-SXM4-40GB, 00000000:13:00.0, 377905, 83 %, 30 %, 556 MiB, 22615 ms
 NVIDIA A100-SXM4-40GB, 00000000:13:00.0, 377976, 89 %, 31 %, 630 MiB, 48763 ms
+=== JOB_STATISTICS ===
+=== current date     : Wed Jul  9 14:15:44 CEST 2025
+= Job-ID             : 2274034 on fritz
+= Job-Name           : ompCPU_bench
+= Job-Command        : /home/hpc/ptfs/ptfs335v/HESP/Exercise
+= Initial workdir    : /home/hpc/ptfs/ptfs335v/HESP/Exercise
+= Queue/Partition    : singlenode
+= Slurm account      : ptfs with QOS=ptfs
+= Requested resources:  for 01:00:00
+= Elapsed runtime    : 00:46:27
+= Total RAM usage    : 0.8 GiB 
+= Node list          : f0354
+= Subm/Elig/Start/End: 2025-07-09T13:29:12 / 2025-07-09T13:29:12 / 2025-07-09T13:29:13 / 2025-07-09T14:15:40
+======================
+=== Quota infos ======
+    Path                 Used     SoftQ    HardQ    Gracetime  Filec    FileQ    FiHaQ    FileGrace    
+    /home/woody             0.0K  1000.0G  1500.0G        N/A       1    5,000K   7,500K        N/A    
+    /home/hpc               6.4G   104.9G   209.7G        N/A  14,791      500K   1,000K        N/A    
+    /lustre                 4.0K     0.0K     0.0K        N/A       1       80K     250K        N/A    
+======================
+=== Network traffic stats (does not include Infiniband) ======
+= HPC internal traffic (e.g. to fileservers): 0 GB in / 0 GB out
+= External traffic: 0 GB in / 0 GB out
+======================

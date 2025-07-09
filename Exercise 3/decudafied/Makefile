@@ -1,13 +1,10 @@
 # Compiler and flags
-COMPILER := g++
-COMPULERCFLAGS :=  
+COMPILER := icpx
+COMPULERCFLAGS :=  -std=c++17
 RM := rm -f
 
-# Get architecture
-#ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | sed 's/\.//')
-#NVARCH := sm_$(ARCH)
-#NVCCFLAGS += -gencode arch=compute_$(ARCH),code=$(NVARCH)
-#NVCCFLAGS += -lcublas
+# Linker flags
+LDFLAGS := -std=c++17 -lstdc++fs
 
 # Target executables
 TARGET := md
@@ -29,11 +26,11 @@ all: $(TARGET) $(INIT_TARGET)
 
 # Build md executable
 $(TARGET): $(OBJS)
-	$(COMPILER) $(COMPULERCFLAGS) -o $@ $^
+	$(COMPILER) $(COMPULERCFLAGS) $(LDFLAGS) -o $@ $^ -lstdc++fs
 
 # Build initialVTKmaker executable
 $(INIT_TARGET): $(INIT_OBJS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(COMPILER) $(COMPULERCFLAGS) $(LDFLAGS) -o $@ $^ -lstdc++fs
 
 # Compile CUDA source files to object files
 %.o: %.cpp $(HEADERS)
@@ -41,7 +38,7 @@ $(INIT_TARGET): $(INIT_OBJS)
 
 # Compile C++ source files to object files
 %.o: %.cpp $(HEADERS)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(COMPILER) $(COMPULERCFLAGS) -c $< -o $@
 
 # Clean up build files
 clean:

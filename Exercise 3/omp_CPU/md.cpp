@@ -1,4 +1,3 @@
-//write a quick test for the parser
 #include <iostream>
 #include <tuple>
 #include <cmath>
@@ -10,9 +9,24 @@
 #include "parser.hpp"
 #include <chrono>
 #include "cpufuncs.hpp"
+#include <omp.h>
 
 
 int main(int argc, char** argv) {
+    // GPU test at the beginning
+    std::cout << "Testing GPU availability..." << std::endl;
+    #pragma omp target
+    {
+        if (omp_is_initial_device()) {
+            printf("Running on CPU\n");
+            printf("Number of threads: %d\n", omp_get_max_threads());
+        } else {
+            printf("Running on GPU\n");
+            printf("Number of teams (blocks): %d\n", omp_get_num_teams());
+            printf("Threads per team (block): %d\n", omp_get_team_size(omp_get_team_num()));
+        }
+    }
+    
     // Check if the correct number of arguments is provided
     std::string configFile;
     if (argc != 2) {
@@ -51,12 +65,12 @@ int main(int argc, char** argv) {
     if (sigma <= 0.0 || epsilon <= 0.0) {
     std::cerr << "Error: Invalid sigma or epsilon values. Exiting simulation." << std::endl;
     return -1;
-}
-// check if poisitions are valid 
-if (positions_old.size() % 3 != 0) {
-    std::cerr << "Error: Invalid number of position values. Exiting simulation." << std::endl;
-    return -1;
-}
+    }
+    // check if positions are valid 
+    if (positions_old.size() % 3 != 0) {
+        std::cerr << "Error: Invalid number of position values. Exiting simulation." << std::endl;
+        return -1;
+    }
 
     // the minimum x is 0.0
     // check if the positions are out of bounds
@@ -67,7 +81,13 @@ if (positions_old.size() % 3 != 0) {
             return -1;
         }
     }
-}
+    }
+
+    //empty the output directory if printInterval is greater than 0
+    if (printInterval > 0) {
+        std::system("rm -rf output/*");
+        std::cout << "Output directory cleared." << std::endl;
+    }
 
     //set box size to the maximum position + 0.5
     accelerations.resize(positions_old.size(), 0.0);
@@ -127,93 +147,125 @@ if (positions_old.size() % 3 != 0) {
     auto positions_total = std::chrono::duration<double>::zero();
     int positions_count = 0;
     auto velocities_total = std::chrono::duration<double>::zero();
+    auto total_elapsed = std::chrono::duration<double>::zero();
     int velocities_count = 0;
     auto forces_and_accelerations_total = std::chrono::duration<double>::zero();
     int forces_and_accelerations_count = 0;
 
+    // Before the time loop: One-time data transfer to GPU
+    double* pos_new = positions_new.data();
+    double* pos_old = const_cast<double*>(positions_old.data());
+    double* vel_new = velocities_new.data();
+    double* vel_old = const_cast<double*>(velocities_old.data());
+    double* acc = const_cast<double*>(accelerations.data());
+    double* force = forces.data();
+    double* mass = const_cast<double*>(masses.data());
+    int* cell_data = cells.data();
+    int* particle_cell = particleCell.data();
 
-    auto total_start = std::chrono::high_resolution_clock::now();
-    for (int timestep = 0; timestep < timeStepCount; ++timestep) {
-        // cout
-        //std::cout << "Time step: " << timestep << std::endl;
-        //std::cout<< "updating positions and velocities"<< std::endl;
-        auto positions_start = std::chrono::high_resolution_clock::now();
-        // make this run on cpu 
-        update_positions( positions_new, positions_old, 
-            velocities_old, accelerations, timeStepLength, boxSize, numParticles);
-        auto positions_end = std::chrono::high_resolution_clock::now();
-        positions_total += positions_end - positions_start;
-        positions_count++;
-        std::swap(positions_old, positions_new);
+    int total_size = numParticles * 3;
+    size_t cell_data_size = cells.size();
+    int N = particleCell.size();
 
-        // make this run on cpu 
-        auto velocities_start = std::chrono::high_resolution_clock::now();
-        update_velocities(velocities_new, velocities_old,
-             accelerations, timeStepLength, numParticles);
-
-        auto velocities_end = std::chrono::high_resolution_clock::now();
-        velocities_total += velocities_end - velocities_start;
-        velocities_count++;
-
-        std::swap(velocities_old, velocities_new);
-
-        //std::cout<< "Positions updated"<< std::endl;
-        //std::cout<< "Update complete, swapping"<< std::endl;
-        
-        // Build up linked neighbor list
-        // Reset cells to -1
-        // always use the cells if (useAcc == 1) {
-        if (useAcc == 1 && timestep % 10 == 0) { // reset cells every 10th timestep
-            resetCells_h(cells); // should we launch less blocks ? 
-            computeParticleCells_h(
-                positions_old,
-                cells,
-                particleCell,
-                num_cells,
-                cell_size
-            );
+    // One-time GPU data transfer for the entire simulation
+    #pragma omp target data \
+        map(tofrom: pos_new[0:total_size], pos_old[0:total_size]) \
+        map(tofrom: vel_new[0:total_size], vel_old[0:total_size]) \
+        map(tofrom: acc[0:total_size], force[0:total_size]) \
+        map(to: mass[0:numParticles]) \
+        map(tofrom: cell_data[0:cell_data_size], particle_cell[0:N])
+    {
+        auto total_start = std::chrono::high_resolution_clock::now();
+        // Main simulation loop (runs sequentially on GPU)
+        for (int timestep = 0; timestep < timeStepCount; ++timestep) {
             
-        }
-        
-        auto forces_and_accelerations_start = std::chrono::high_resolution_clock::now();
-        //std::cout << " Calculating Forces and accelerations"<< std::endl;
-        // update forces and accelerations
-        // make this run on cpu
-        acceleration_updater(accelerations,positions_old, 
-            forces, masses, sigma, epsilon, boxSize, cutoffRadius, numParticles, cells, particleCell, num_cells);
+            auto positions_start = std::chrono::high_resolution_clock::now();
             
-        auto forces_and_accelerations_end = std::chrono::high_resolution_clock::now();
-        forces_and_accelerations_total += forces_and_accelerations_end - forces_and_accelerations_start;
-        forces_and_accelerations_count++;
-        // cout
-        //std::cout << "updating velocities"<< std::endl;
-        // update velocities
-        auto update_velocities_start = std::chrono::high_resolution_clock::now();
-        update_velocities(velocities_new, velocities_old,
-             accelerations, timeStepLength, numParticles);
-        
-        auto update_velocities_end = std::chrono::high_resolution_clock::now();
-        velocities_total += update_velocities_end - update_velocities_start;
-        velocities_count++;
+            // Position update (parallelized kernel)
+            update_positions_kernel(pos_new, pos_old, vel_old, acc, timeStepLength, total_size);
+            
+            // Apply periodic boundaries after position calculation
+            if (boxSize > 0.000000001) {
+                apply_periodic_boundaries_kernel(pos_new, boxSize, numParticles);
+            }
+            
+            auto positions_end = std::chrono::high_resolution_clock::now();
+            positions_total += positions_end - positions_start;
+            positions_count++;
+            
+            // Swap operations on GPU pointers (only pointer exchange)
+            double* temp_pos = pos_old;
+            pos_old = pos_new;
+            pos_new = temp_pos;
 
-        // transfer new positions and velocities to old positions
-        
-        std::swap(velocities_old, velocities_new);
-        
-        //std::cout<< "Loop complete"<< std::endl;
-        // print to file every printInterval steps
-        if (printInterval > 0 && timestep % printInterval == 0) {
-            // cout
-            // !!!!!!! the write can run in a separate thread !!!!!!!!!!!!
-            std::cout << "writing iteration " << timestep<<" to file"<< std::endl;
-            std::vector<double> positions_old_copy = positions_old;
-            std::vector<double> velocities_old_copy = velocities_old;        
-            std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
-            writeVTKFile(outputFile, positions_old_copy, velocities_old_copy, masses);
+            auto velocities_start = std::chrono::high_resolution_clock::now();
+            
+            // Velocity update (parallelized kernel)
+            update_velocities_kernel(vel_new, vel_old, acc, timeStepLength, total_size);
+            
+            auto velocities_end = std::chrono::high_resolution_clock::now();
+            velocities_total += velocities_end - velocities_start;
+            velocities_count++;
+
+            // Swap operations on GPU pointers
+            double* temp_vel = vel_old;
+            vel_old = vel_new;
+            vel_new = temp_vel;
+            
+            // Update cell lists every 10 time steps
+            if (useAcc == 1 && timestep % 10 == 0) {
+                resetCells_kernel(cell_data, cell_data_size);
+                computeParticleCells_kernel(
+                    pos_old, // Use current positions
+                    cell_data,
+                    particle_cell,
+                    N,
+                    num_cells,
+                    cell_size,
+                    total_cells
+                );
+            }
+            
+            auto forces_and_accelerations_start = std::chrono::high_resolution_clock::now();
+            
+            // Calculate forces and accelerations (parallelized kernel)
+            acceleration_updater_kernel(acc, pos_old, force, mass, cell_data, particle_cell,
+                                    sigma, epsilon, boxSize, cutoffRadius, numParticles, num_cells);
+                
+            auto forces_and_accelerations_end = std::chrono::high_resolution_clock::now();
+            forces_and_accelerations_total += forces_and_accelerations_end - forces_and_accelerations_start;
+            forces_and_accelerations_count++;
+            
+            auto update_velocities_start = std::chrono::high_resolution_clock::now();
+            
+            // Second velocity update (parallelized kernel)
+            update_velocities_kernel(vel_new, vel_old, acc, timeStepLength, total_size);
+            
+            auto update_velocities_end = std::chrono::high_resolution_clock::now();
+            velocities_total += update_velocities_end - update_velocities_start;
+            velocities_count++;
+
+            // Swap operations on GPU pointers
+            temp_vel = vel_old;
+            vel_old = vel_new;
+            vel_new = temp_vel;
+
+            // VTK output at specific intervals
+            if (printInterval > 0 && timestep % printInterval == 0) {
+                std::cout << "writing iteration " << timestep << " to file" << std::endl;
+                
+                // Create temporary CPU copies for VTK output
+                // (GPU data is automatically copied back to CPU for this operation)
+                #pragma omp target update from(pos_old[0:total_size], vel_old[0:total_size])
+                
+                std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
+                writeVTKFileNew(outputFile, pos_old, vel_old, mass, numParticles);
+            }
         }
-    }
-    auto total_end = std::chrono::high_resolution_clock::now();
-    auto total_elapsed = total_end - total_start;
+        auto total_end = std::chrono::high_resolution_clock::now();
+        total_elapsed = total_end - total_start;
+    } // End of target data block - data is transferred back to CPU here
+
     
     std::cout << "Time for "<< positions_count<< " calls of the updating positions function: " << std::chrono::duration<double>(positions_total).count() << " seconds" << std::endl;
     std::cout << "Time for "<< velocities_count<< " calls of the updating velocities function: " << std::chrono::duration<double>(velocities_total).count() << " seconds" << std::endl;
