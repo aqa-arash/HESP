@@ -9,8 +9,8 @@
 #include <utility>
 #include <algorithm>
 #include <execution> // for stdparallel algorithms (if needed)
-#include <ranges>   // for std::views::iota
-
+#include <numeric> // for std::iota
+#include <atomic> // for atomic operations
 
 // Find the minimal d > cutoffRadius such that boxSize / d is approximately an integer
 std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
@@ -47,10 +47,10 @@ std::pair<double, int> findMinimalDivisor(double cutoffRadius, double boxSize) {
 }
 
 // function to check and update periodic boundaries for each particle (can be globalized)
-void checkPeriodicBoundaries(double & x, double & y, double & z, double boxSize) {
-    x = fmod(fmod(x, boxSize) + boxSize, boxSize);
-    y = fmod(fmod(y, boxSize) + boxSize, boxSize);
-    z = fmod(fmod(z, boxSize) + boxSize, boxSize);
+void checkPeriodicBoundaries(double * x, double * y, double * z, double boxSize) {
+    *x = fmod(fmod(*x, boxSize) + boxSize, boxSize);
+    *y = fmod(fmod(*y, boxSize) + boxSize, boxSize);
+    *z = fmod(fmod(*z, boxSize) + boxSize, boxSize);
 }
 
 
@@ -108,10 +108,12 @@ void ij_forces(std::vector<double> & forces,const std::vector<double> & distance
 // resetCells function to reset the cells array
 void resetCells_h(std::vector<std::atomic<int>> & cells) {
     int N = cells.size(); // Number of cells
-    auto range = std::views::iota (0, N); // Ensure compatibility with C++20 ranges
-    std::for_each (std::execution::par_unseq, range.begin(),range.end(), [&](int idx) {
+    std::vector<int> range(N);
+    std::iota(range.begin(), range.end(), 0); // Fill range with indices
+    std::atomic<int> * cells_ptr = cells.data(); // Cast to atomic pointer for direct access
+    std::for_each (std::execution::par_unseq, range.begin(),range.end(), [cells_ptr](int idx) {
         // Reset each cell to -1
-        cells[idx].store(-1, std::memory_order_relaxed);
+        cells_ptr[idx].store(-1, std::memory_order_relaxed);
     });
     // Note: We use relaxed memory order here because we are just resetting the values
 }
@@ -125,9 +127,12 @@ void computeParticleCells_h(
     double cell_size)          // Cell size (same in x, y, z)
 {
     int N = particleCell.size(); // Number of particles
-    auto range = std::views::iota(0, N); // Ensure compatibility with C++20 ranges
-    // Loop over all particles
-    std::for_each (std::execution::par_unseq, range.begin(), range.end(), [&](int i) {
+    std::vector<int> range(N);
+    std::iota(range.begin(), range.end(), 0); // Fill range with indices    
+    // // Loop over all particles
+    int * particleCell_ptr = particleCell.data();
+    std::atomic<int> * cells_ptr = cells.data(); // Cast to atomic pointer for direct access
+    std::for_each (std::execution::par_unseq, range.begin(), range.end(), [cells_ptr, particleCell_ptr, positions, num_cells,cell_size](int i) {
     // Access x, y, z of particle i
     double x = positions[3 * i + 0];
     double y = positions[3 * i + 1];
@@ -149,10 +154,10 @@ void computeParticleCells_h(
     // Insert particle i at the front of the linked list for this cell (no need for atomic operation on CPU)
     int current_head, new_head;
         do {
-            current_head = cells[cell_index].load(std::memory_order_acquire);
-            particleCell[i] = current_head;
+            current_head = cells_ptr[cell_index].load(std::memory_order_acquire);
+            particleCell_ptr[i] = current_head;
             new_head = i;
-        } while (!cells[cell_index].compare_exchange_weak(
+        } while (!cells_ptr[cell_index].compare_exchange_weak(
             current_head, new_head, 
             std::memory_order_release, 
             std::memory_order_acquire));
@@ -179,15 +184,19 @@ void acceleration_updater(
     double sigma, double epsilon, double boxSize, double cutoffRadius, int numParticles, 
     std::vector<std::atomic<int>> & cells, std::vector<int> &  particleCell, int num_cells)  // num_cells added as param
 {
-    auto range = std::views::iota(0,numParticles); // Ensure compatibility with C++20 ranges
-
-    std::for_each (std::execution::par_unseq, range.begin(),range.end(), [&](int particle_idx) {
+    std::vector<int> range(numParticles);
+    std::iota(range.begin(), range.end(), 0); // Fill range with indices
+    double * acceleration_ptr = acceleration.data();
+    double * forces_ptr = forces.data();
+    std::atomic<int> * cells_ptr = cells.data(); // Cast to atomic pointer for direct access
+    std::for_each (std::execution::par_unseq, range.begin(),range.end(), [cells_ptr,acceleration_ptr,forces_ptr,
+    num_cells,particleCell,sigma, epsilon,boxSize,cutoffRadius,numParticles, positions, masses ](int particle_idx) {
     int particle_pos = particle_idx * 3;
 
     // Reset force vector for this particle
-    forces[particle_pos] = 0.0;
-    forces[particle_pos + 1] = 0.0;
-    forces[particle_pos + 2] = 0.0;
+    forces_ptr[particle_pos] = 0.0;
+    forces_ptr[particle_pos + 1] = 0.0;
+    forces_ptr[particle_pos + 2] = 0.0;
     // calculate cell x y z coordinates
     int cell_x, cell_y, cell_z;
     double x_P = positions[particle_pos + 0];
@@ -214,7 +223,7 @@ void acceleration_updater(
                                             neighbor_cell_z * num_cells * num_cells;
 
                 // Get the first particle in this cell
-                int j = cells[neighbor_cell_index].load(std::memory_order_acquire);
+                int j = cells_ptr[neighbor_cell_index].load(std::memory_order_acquire);
                 while (j != -1) {
                     if (j != particle_idx) { // Skip self interaction
                         // Calculate distance and forces
@@ -227,9 +236,9 @@ void acceleration_updater(
                         ij_forces(ij_force, distances, sigma, epsilon, cutoffRadius);
 
                         // Accumulate forces
-                        forces[particle_pos] += ij_force[0];
-                        forces[particle_pos + 1] += ij_force[1];
-                        forces[particle_pos + 2] += ij_force[2];
+                        forces_ptr[particle_pos] += ij_force[0];
+                        forces_ptr[particle_pos + 1] += ij_force[1];
+                        forces_ptr[particle_pos + 2] += ij_force[2];
                     }
                     j = particleCell[j]; // Move to next particle in the linked list
                 }
@@ -238,9 +247,9 @@ void acceleration_updater(
     }
         // Calculate acceleration by dividing force by particle mass
         double mass = masses[particle_idx];
-        acceleration[particle_pos]     = forces[particle_pos]     / mass;
-        acceleration[particle_pos + 1] = forces[particle_pos + 1] / mass;
-        acceleration[particle_pos + 2] = forces[particle_pos + 2] / mass;
+        acceleration_ptr[particle_pos]     = forces_ptr[particle_pos]     / mass;
+        acceleration_ptr[particle_pos + 1] = forces_ptr[particle_pos + 1] / mass;
+        acceleration_ptr[particle_pos + 2] = forces_ptr[particle_pos + 2] / mass;
 });
     // Note: The forces and accelerations vectors are modified in place, so no need to
 }
@@ -254,19 +263,22 @@ void acceleration_updater(
 
 void update_positions(std::vector<double> & positions_new, const std::vector<double> & positions_old , const std::vector<double> & velocities_old, 
     const std::vector<double> & accelerations, double dt, double boxSize, int numParticles) {
-        auto range = std::views::iota(0,numParticles); // Ensure compatibility with C++20 ranges
-        std::for_each(std::execution::par_unseq, range.begin(), range.end(), [&](int particle_idx) {
+    std::vector<int> range(numParticles);
+    std::iota(range.begin(), range.end(), 0); // Fill range with indices
+    double * positions_new_ptr = positions_new.data();
+
+    std::for_each(std::execution::par_unseq, range.begin(), range.end(), [=](int particle_idx) {
         int particle_pos = 3* particle_idx;
-        positions_new[particle_pos] = positions_old[particle_pos] + velocities_old[particle_pos] * dt 
+        positions_new_ptr[particle_pos] = positions_old[particle_pos] + velocities_old[particle_pos] * dt 
                                     + 0.5 * accelerations[particle_pos] * dt * dt;
-        positions_new[particle_pos + 1] = positions_old[particle_pos + 1] + velocities_old[particle_pos + 1] * dt 
+        positions_new_ptr[particle_pos + 1] = positions_old[particle_pos + 1] + velocities_old[particle_pos + 1] * dt 
                                     + 0.5 * accelerations[particle_pos + 1] * dt * dt;
-        positions_new[particle_pos + 2] = positions_old[particle_pos + 2] + velocities_old[particle_pos + 2] * dt 
+        positions_new_ptr[particle_pos + 2] = positions_old[particle_pos + 2] + velocities_old[particle_pos + 2] * dt 
                                     + 0.5 * accelerations[particle_pos + 2] * dt * dt;
 
     if (boxSize>0.000000001){ // to prevent numerical errors 
     // Check periodic boundaries
-        checkPeriodicBoundaries(positions_new [ particle_pos], positions_new [ particle_pos + 1], positions_new [ particle_pos + 2], boxSize);
+        checkPeriodicBoundaries(positions_new_ptr + particle_pos, positions_new_ptr + particle_pos + 1, positions_new_ptr + particle_pos + 2, boxSize);
         }
         }); // end of for_each
     // Note: The checkPeriodicBoundaries function modifies the positions in place, so no need 
@@ -276,12 +288,14 @@ void update_positions(std::vector<double> & positions_new, const std::vector<dou
 
 void update_velocities(std::vector<double> & velocities_new, const std::vector<double> & velocities_old , 
     const std::vector<double> & accelerations, double dt, int numParticles) {
-        auto range = std::views::iota(0,numParticles); // Ensure compatibility with C++20 ranges
-    std::for_each (std::execution::par_unseq, range.begin(), range.end(), [&](int i) {
+std::vector<int> range(numParticles);
+    std::iota(range.begin(), range.end(), 0); // Fill range with indices 
+    double * velocities_new_ptr = velocities_new.data();   
+    std::for_each (std::execution::par_unseq, range.begin(), range.end(), [=](int i) {
         int particle_idx = 3* i;
         
-        velocities_new[particle_idx] = velocities_old[particle_idx] + 0.5 * accelerations[particle_idx] * dt;
-        velocities_new[particle_idx + 1] = velocities_old[particle_idx + 1] +  0.5 * accelerations[particle_idx + 1] * dt;
-        velocities_new[particle_idx + 2] = velocities_old[particle_idx + 2] + 0.5 * accelerations[particle_idx + 2] * dt;
+        velocities_new_ptr[particle_idx] = velocities_old[particle_idx] + 0.5 * accelerations[particle_idx] * dt;
+        velocities_new_ptr[particle_idx + 1] = velocities_old[particle_idx + 1] +  0.5 * accelerations[particle_idx + 1] * dt;
+        velocities_new_ptr[particle_idx + 2] = velocities_old[particle_idx + 2] + 0.5 * accelerations[particle_idx + 2] * dt;
     });
 }

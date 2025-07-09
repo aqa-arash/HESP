@@ -12,7 +12,7 @@
 #include "cpufuncs.hpp"
 #include <algorithm>
 #include <execution>
-#include <ranges>
+#include <atomic>
 #include <thread> // for multithreading (if needed)
 
 
