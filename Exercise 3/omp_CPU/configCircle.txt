@@ -4,11 +4,11 @@
 initialization file: initialCircle.vtk
 
 box size: 500
-time step length: 0.002
-time step count: 500
+time step length: 0.0001
+time step count: 20000
 sigma: 3.4
 epsilon: 0.238
 
-print interval: 10
-cutoff radius: 8.0
+print interval: 250
+cutoff radius: 8.5
 acceleration: 1

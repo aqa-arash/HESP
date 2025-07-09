@@ -4,12 +4,12 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
 #include <iomanip> 
 
 //parse vtk file
 void parseVTKFile(const std::string& filename, std::vector<double>& positions,
                std::vector<double>& velocities, std::vector<double>& masses) {
-    
     std::cout << "Parsing VTK file: " << filename << std::endl;
     // Check if the filename has hidden characters
     if (filename.find_first_of("\r\n\t") != std::string::npos) {
@@ -142,6 +142,7 @@ void parseConfigFile(const std::string& filename, std::vector<double>& positions
 //write vtk file
 void writeVTKFile(const std::string& filename, const std::vector<double>& positions,
                   const std::vector<double>& velocities, const std::vector<double>& masses) {
+    std::filesystem::create_directories(std::filesystem::path(filename).parent_path());
     std::ofstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Error opening file: " << filename << std::endl;

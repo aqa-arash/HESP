@@ -10,10 +10,6 @@
 #include "parser.hpp"
 #include <chrono>
 #include "cpufuncs.hpp"
-#include <algorithm>
-#include <execution>
-#include <atomic>
-#include <thread> // for multithreading (if needed)
 
 
 int main(int argc, char** argv) {
@@ -99,10 +95,9 @@ if (positions_old.size() % 3 != 0) {
     }
     
     int total_cells = num_cells * num_cells * num_cells;
-    std::vector<std::atomic<int>>cells(total_cells);
+    std::vector<int>cells(total_cells, -1);
     std::vector<int> particleCell(numParticles, 0);
     // make this run on cpu 
-    resetCells_h(cells); // reset cells to -1
     computeParticleCells_h(
                 positions_old,
                 cells,
@@ -136,7 +131,6 @@ if (positions_old.size() % 3 != 0) {
     auto forces_and_accelerations_total = std::chrono::duration<double>::zero();
     int forces_and_accelerations_count = 0;
 
-    std::thread writer_thread; // Thread for writing VTK files
 
     auto total_start = std::chrono::high_resolution_clock::now();
     for (int timestep = 0; timestep < timeStepCount; ++timestep) {
@@ -210,15 +204,12 @@ if (positions_old.size() % 3 != 0) {
         // print to file every printInterval steps
         if (printInterval > 0 && timestep % printInterval == 0) {
             // cout
-            if (writer_thread.joinable()){
-                writer_thread.join(); // wait for the previous write to finish
-            }
             // !!!!!!! the write can run in a separate thread !!!!!!!!!!!!
             std::cout << "writing iteration " << timestep<<" to file"<< std::endl;
             std::vector<double> positions_old_copy = positions_old;
             std::vector<double> velocities_old_copy = velocities_old;        
             std::string outputFile = "output/cuda-output" + std::to_string(timestep / printInterval) + ".vtk";
-            writer_thread = std::thread(writeVTKFile, outputFile, positions_old_copy, velocities_old_copy, masses);
+            writeVTKFile(outputFile, positions_old_copy, velocities_old_copy, masses);
         }
     }
     auto total_end = std::chrono::high_resolution_clock::now();
@@ -246,10 +237,6 @@ if (positions_old.size() % 3 != 0) {
     } else {
         std::cerr << "Could not open runtimes.txt for writing!" << std::endl;
     }
-        // Join the writer thread before ending the program
-    if (writer_thread.joinable()) {
-        writer_thread.join(); // Wait for the final write to complete
-    }
-    
+
     return 0;
 }

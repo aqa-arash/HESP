@@ -158,3 +158,38 @@ Time for 100000 calls of the updating velocities function: 2.3422 seconds
 Time for 50000 calls of the forces and accelerations function: 1.83101 seconds
 Total time for GPU simulation: 5.81123 seconds
 ----------------------------------------
+----------------------------------------
+Configuration File: config.txt
+Time for 50000 calls of the updating positions function: 0.0324453 seconds
+Time for 100000 calls of the updating velocities function: 0.0649302 seconds
+Time for 50000 calls of the forces and accelerations function: 0.0328199 seconds
+Total time for GPU simulation: 0.197389 seconds
+----------------------------------------
+----------------------------------------
+Configuration File: config.txt
+Time for 50000 calls of the updating positions function: 0.627823 seconds
+Time for 100000 calls of the updating velocities function: 0.945686 seconds
+Time for 50000 calls of the forces and accelerations function: 1.08279 seconds
+Total time for GPU simulation: 2.80897 seconds
+----------------------------------------
+----------------------------------------
+Configuration File: config.txt
+Time for 50000 calls of the updating positions function: 0.625434 seconds
+Time for 100000 calls of the updating velocities function: 0.94011 seconds
+Time for 50000 calls of the forces and accelerations function: 1.08248 seconds
+Total time for GPU simulation: 2.83736 seconds
+----------------------------------------
+----------------------------------------
+Configuration File: config.txt
+Time for 1000 calls of the updating positions function: 0.0148001 seconds
+Time for 2000 calls of the updating velocities function: 0.02102 seconds
+Time for 1000 calls of the forces and accelerations function: 0.0270909 seconds
+Total time for GPU simulation: 0.417639 seconds
+----------------------------------------
+----------------------------------------
+Configuration File: config.txt
+Time for 1000 calls of the updating positions function: 0.0136197 seconds
+Time for 2000 calls of the updating velocities function: 0.0206943 seconds
+Time for 1000 calls of the forces and accelerations function: 0.0283572 seconds
+Total time for GPU simulation: 0.211598 seconds
+----------------------------------------
