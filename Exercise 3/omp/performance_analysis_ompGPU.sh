@@ -2,7 +2,7 @@
 # Performance Analysis Script for OpenMP GPU Code
 
 # Define particle counts for testing
-particle_counts=(10 20 50 100 200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000 2000000 4000000)
+particle_counts=(10 20 50 100 200 500 1000 2000 5000 10000 20000 50000 100000 200000 500000 1000000 2000000 5000000)
 
 # Output file for results
 output_file="ompGPU_performance_results_alex.txt"
