@@ -1,0 +1,3 @@
+/var/tmp/slurmd_spool/job2847326/slurm_script: line 11: module: command not found
+/var/tmp/slurmd_spool/job2847326/slurm_script: line 12: module: command not found
+slurmstepd: error: *** JOB 2847326 ON a0704 CANCELLED AT 2025-07-09T10:16:07 ***

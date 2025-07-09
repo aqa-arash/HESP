@@ -1,0 +1,13 @@
+/var/tmp/slurmd_spool/job2847387/slurm_script: line 11: module: command not found
+/var/tmp/slurmd_spool/job2847387/slurm_script: line 12: module: command not found
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory
+performance_analysis_ompGPU_local.sh: line 24: ./initialVTKmaker: No such file or directory

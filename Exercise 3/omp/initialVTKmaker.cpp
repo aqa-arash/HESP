@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
 
     // declare variables with default values
     std::vector<double> positions, velocities, masses;
-    double boxSize = 500.0;  // default value
+    double boxSize = 1000.0;  // default value
     int numParticles = 1000; // default value
     
     // Parse command line arguments
