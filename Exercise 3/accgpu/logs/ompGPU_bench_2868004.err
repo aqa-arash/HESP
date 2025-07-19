@@ -1,0 +1,4 @@
+/var/tmp/slurmd_spool/job2868004/slurm_script: line 11: module: command not found
+/var/tmp/slurmd_spool/job2868004/slurm_script: line 12: module: command not found
+performance_analysis_oaccGPU.sh: line 99: unexpected EOF while looking for matching `"'
+performance_analysis_oaccGPU.sh: line 100: syntax error: unexpected end of file
