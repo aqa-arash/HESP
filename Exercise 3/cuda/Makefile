@@ -15,7 +15,7 @@ INIT_TARGET := initialVTKmaker
 
 # Source files
 SRCS := md.cu
-INIT_SRCS := initialVTKmaker.cpp
+INIT_SRCS := sphere-initializer.cpp 
 
 # Header files
 HEADERS := parser.hpp cudafuncs.hpp cpufuncs.hpp 

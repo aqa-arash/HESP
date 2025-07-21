@@ -12,9 +12,9 @@ std::vector<double> generateSphereParticles(int numParticles, float radius) {
         float phi = acos(1 - 2 * (i + 0.5f) / numParticles);  // from 0 to pi
         float theta = M_PI * (1 + std::sqrt(5)) * i;           // golden angle
 
-        float x = radius * std::sin(phi) * std::cos(theta);
-        float y = radius * std::sin(phi) * std::sin(theta);
-        float z = radius * std::cos(phi);
+        float x =2*radius+ radius * std::sin(phi) * std::cos(theta);
+        float y =2*radius+ radius * std::sin(phi) * std::sin(theta);
+        float z =2*radius+ radius * std::cos(phi);
 
         particles.push_back(x);
         particles.push_back(y);
@@ -25,8 +25,8 @@ std::vector<double> generateSphereParticles(int numParticles, float radius) {
 
 
 int main() {
-    int numParticles = 100;
-    float radius = 5.0f;
+    int numParticles = 10000;
+    float radius = 50.0f;
 
     auto particles = generateSphereParticles(numParticles, radius);
     std::vector<double> velocities(numParticles*3, 0.0); // 3 components per particle

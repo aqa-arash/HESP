@@ -54,7 +54,7 @@ def load_performance_data(file_path):
 
 # File path constants for all implementations
 CUDA_LABEL = 'CUDA'
-CUDA_FILE = 'cuda/cuda_performance_results.txt'
+CUDA_FILE = 'cudaGPU_performance_results_alex.txt'
 OPENMPGPU_LABEL = 'OpenMPgpu'
 OPENMPGPU_FILE = 'omp/ompGPU_performance_results_alex.txt'
 OPENMPCPU_LABEL = 'OpenMPcpu'
@@ -62,13 +62,16 @@ OPENMPCPU_FILE = 'omp_CPU/ompCPU_performance_results_fritz.txt'
 CPU_ONLY_LABEL = 'CPU Only'
 CPU_ONLY_FILE = 'decudafied/decudafied_performance_results.txt'
 OPENACCGPU_LABEL = 'OpenACCgpu'
-OPENACCGPU_FILE = 'accgpu/oaccGPU_performance_results_alex1.txt'
+OPENACCGPU_FILE = 'accgpu/oaccGPU_performance_results_alex.txt'
+THRUST_LABEL = 'Thrust'
+THRUST_FILE = 'thrust_performance_results.txt'  # Not used in
 # Enable/disable which results to plot
-cuda = False
+cuda = True
 openmpgpu = True
 openmpcpu = True
 cpu_only = True
 openaccgpu = True
+thrust = True  # Thrust is not used in this script
 
 # Enable/disable reference lines
 show_on = False
@@ -94,6 +97,8 @@ def create_performance_plot():
         files[CPU_ONLY_LABEL] = CPU_ONLY_FILE
     if openaccgpu:
         files[OPENACCGPU_LABEL] = OPENACCGPU_FILE
+    if thrust:
+        files[THRUST_LABEL] = THRUST_FILE
     
     # Load data from all files
     data = {}
@@ -115,14 +120,18 @@ def create_performance_plot():
         'OpenMPgpu': '#ff7f0e',
         'OpenMPcpu': '#9467bd',
         'CPU Only': '#2ca02c',
-        'OpenACCgpu': '#d62728'  # Add OpenACCcpu color
+        'OpenACCgpu': '#d62728',  # Add OpenACCcpu color
+        'Thrust': "#000514"  # Thrust color
+
     }
+
     markers = {
         'CUDA': 'o',
         'OpenMPgpu': 's',
         'OpenMPcpu': 'D',
         'CPU Only': '^',
-        'OpenACCgpu': 'v'        # Add OpenACCcpu marker
+        'OpenACCgpu': 'v',        # Add OpenACCcpu marker
+        'Thrust': '*'  # Thrust marker
     }
     
     # Plot data for each version
@@ -218,6 +227,8 @@ def create_detailed_performance_plots():
         files[CPU_ONLY_LABEL] = CPU_ONLY_FILE
     if openaccgpu:
         files[OPENACCGPU_LABEL] = OPENACCGPU_FILE
+    if thrust:
+        files[THRUST_LABEL] = THRUST_FILE
     
     # Load data from all files
     data = {}
@@ -243,14 +254,16 @@ def create_detailed_performance_plots():
         'OpenMPgpu': '#ff7f0e',
         'OpenMPcpu': '#9467bd',
         'CPU Only': '#2ca02c',
-        'OpenACCgpu': '#d62728'  
+        'OpenACCgpu': '#d62728',
+        'Thrust': "#000514"  # Thrust color
     }
     markers = {
         'CUDA': 'o',
         'OpenMPgpu': 's',
         'OpenMPcpu': 'D',
         'CPU Only': '^',
-        'OpenACCgpu': 'v'        
+        'OpenACCgpu': 'v',
+        'Thrust': '*'  # Thrust marker      
     }
     
     # Create figure with subplots

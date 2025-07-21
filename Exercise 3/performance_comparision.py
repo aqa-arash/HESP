@@ -63,7 +63,7 @@ CPU_ONLY_LABEL = 'CPU Only'
 CPU_ONLY_FILE = 'decudafied/decudafied_performance_results.txt'
 
 # Enable/disable which results to plot
-cuda = False
+cuda = True
 openmpgpu = True
 openmpcpu = True
 cpu_only = True
